@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Check, Circle, Clock, AlertTriangle } from "lucide-react";
+import { Check, Circle, Clock, AlertTriangle, TrendingDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { formatMoney } from "@/lib/format";
 import { formatShortDate } from "@/lib/dates";
@@ -71,9 +71,27 @@ export function ScheduleList({
           const meta = STATE_META[row.state];
           const Icon = meta.icon;
 
+          const extraBefore = Number(row.extra_principal_before ?? 0);
+
           return (
+            <React.Fragment key={row.id}>
+              {extraBefore > 0 && (
+                <li className="flex items-center gap-3 px-4 py-1.5">
+                  <span
+                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/15 text-primary"
+                    aria-hidden
+                  >
+                    <TrendingDown className="h-3.5 w-3.5" />
+                  </span>
+                  <span className="flex-1 text-xs text-muted-foreground">
+                    Abono a capital
+                  </span>
+                  <span className="tabular text-xs font-semibold text-primary">
+                    −{formatMoney(extraBefore, currency)}
+                  </span>
+                </li>
+              )}
             <li
-              key={row.id}
               className={cn(
                 "flex items-center gap-3 rounded-2xl px-4 py-3",
                 row.state === "next" ? "bg-secondary" : "bg-card",
@@ -112,6 +130,7 @@ export function ScheduleList({
                 </p>
               </div>
             </li>
+            </React.Fragment>
           );
         })}
       </ol>

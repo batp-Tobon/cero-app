@@ -1,12 +1,15 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
-import { CheckCircle2 } from "lucide-react";
-import { getCreditDetail } from "@/server/queries/credits";
+import { CheckCircle2, Users } from "lucide-react";
+import { getCreditDetail, getCreditPayments } from "@/server/queries/credits";
+import { getCreditMembers } from "@/server/actions/members";
+import { getCurrentUser } from "@/infrastructure/supabase/server";
 import { PageHeader } from "@/components/layout/page-header";
 import { CardEyebrow } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { ScheduleList } from "@/components/credits/schedule-list";
 import { CreditMenu } from "@/components/credits/credit-menu";
+import { PaymentHistory } from "@/components/payments/payment-history";
 import {
   ExtraPrincipalButton,
   PayButton,
@@ -31,6 +34,14 @@ export default async function CreditDetailPage({ params }: Params) {
   if (!detail) notFound();
 
   const { credit, summary, installments } = detail;
+
+  const [user, members, payments] = await Promise.all([
+    getCurrentUser(),
+    getCreditMembers(id),
+    getCreditPayments(id),
+  ]);
+  const isOwner = credit.owner_id === user?.id;
+  const sharedWith = members.filter((m) => m.role !== "owner");
   const subtitle = [credit.entity, creditTypeLabel(credit.type)]
     .filter(Boolean)
     .join(" · ");
@@ -63,7 +74,9 @@ export default async function CreditDetailPage({ params }: Params) {
         subtitle={subtitle}
         backHref="/creditos"
         centered
-        action={<CreditMenu credit={credit} />}
+        action={
+          <CreditMenu credit={credit} members={members} isOwner={isOwner} />
+        }
       />
 
       <section aria-labelledby="balance" className="mt-7 text-center">
@@ -72,6 +85,16 @@ export default async function CreditDetailPage({ params }: Params) {
           {formatMoney(summary.balance, credit.currency)}
         </p>
       </section>
+
+      {sharedWith.length > 0 && (
+        <p className="mt-3 flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
+          <Users className="h-3.5 w-3.5" aria-hidden />
+          Compartido con{" "}
+          {sharedWith
+            .map((m) => m.fullName ?? m.email ?? "otra persona")
+            .join(", ")}
+        </p>
+      )}
 
       <dl className="mt-7 grid grid-cols-3 gap-2.5">
         <Stat
@@ -150,6 +173,8 @@ export default async function CreditDetailPage({ params }: Params) {
       )}
 
       <ScheduleList installments={installments} currency={credit.currency} />
+
+      <PaymentHistory payments={payments} currency={credit.currency} />
 
       <section className="mt-8 rounded-3xl bg-card p-5">
         <h2 className="text-base font-semibold tracking-tight">
