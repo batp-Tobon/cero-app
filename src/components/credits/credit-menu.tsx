@@ -17,7 +17,9 @@ import { Label } from "@/components/ui/label";
 import { OptionGrid } from "@/components/common/option-grid";
 import { InlineNotice } from "@/components/common/states";
 import { deleteCredit, updateCredit } from "@/server/actions/credits";
+import { SharePanel } from "@/components/credits/share-panel";
 import { EXTRA_PRINCIPAL_MODES } from "@/lib/constants";
+import type { CreditMember } from "@/server/actions/members";
 import type { ExtraPrincipalMode } from "@/core/domain/amortization";
 import type { Credit } from "@/types/domain";
 
@@ -25,7 +27,15 @@ import type { Credit } from "@/types/domain";
  * Ajustes del crédito. Monto, tasa y plazo no se editan: ya hay pagos
  * calculados sobre ellos y cambiarlos falsearía el histórico.
  */
-export function CreditMenu({ credit }: { credit: Credit }) {
+export function CreditMenu({
+  credit,
+  members,
+  isOwner,
+}: {
+  credit: Credit;
+  members: CreditMember[];
+  isOwner: boolean;
+}) {
   const router = useRouter();
   const [open, setOpen] = React.useState(false);
   const [name, setName] = React.useState(credit.name);
@@ -104,6 +114,7 @@ export function CreditMenu({ credit }: { credit: Credit }) {
             </SheetDescription>
           </SheetHeader>
 
+          {isOwner && (
           <form onSubmit={onSave} className="space-y-4">
             {error && <InlineNotice variant="danger">{error}</InlineNotice>}
 
@@ -160,7 +171,22 @@ export function CreditMenu({ credit }: { credit: Credit }) {
               Guardar cambios
             </Button>
           </form>
+          )}
 
+          <div className="mt-7 border-t border-border pt-5">
+            <h3 className="text-sm font-semibold">Compartido con</h3>
+            <p className="mb-3 mt-1 text-xs leading-relaxed text-muted-foreground">
+              Un crédito de pareja lo ven los dos; el resto sigue siendo
+              privado.
+            </p>
+            <SharePanel
+              creditId={credit.id}
+              members={members}
+              isOwner={isOwner}
+            />
+          </div>
+
+          {isOwner && (
           <div className="mt-6 border-t border-border pt-5">
             {confirmingDelete ? (
               <div className="space-y-3">
@@ -201,6 +227,7 @@ export function CreditMenu({ credit }: { credit: Credit }) {
               </Button>
             )}
           </div>
+          )}
         </SheetContent>
       </Sheet>
     </>

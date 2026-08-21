@@ -365,6 +365,10 @@ export type Database = {
       is_credit_member: { Args: { p_credit_id: string }; Returns: boolean };
       owns_revolving: { Args: { p_account_id: string }; Returns: boolean };
       is_admin: { Args: Record<string, never>; Returns: boolean };
+      find_profile_by_email: {
+        Args: { p_email: string };
+        Returns: { id: string; full_name: string | null; email: string | null }[];
+      };
     };
     Enums: {
       credit_type: CreditTypeDB;
