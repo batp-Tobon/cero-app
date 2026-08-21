@@ -8,6 +8,8 @@ import {
 } from "@/server/queries/credits";
 import { DebtSummary } from "@/components/dashboard/debt-summary";
 import { UpcomingPayments } from "@/components/dashboard/upcoming-payments";
+import { MonthSummary } from "@/components/dashboard/month-summary";
+import { CreditMix } from "@/components/dashboard/credit-mix";
 import { UserAvatar } from "@/components/layout/user-avatar";
 import { EmptyState, ErrorState } from "@/components/common/states";
 import { greeting } from "@/lib/dates";
@@ -59,7 +61,17 @@ export default async function DashboardPage() {
       ) : (
         <>
           <DebtSummary overview={overview} />
+          <MonthSummary
+            monthlyCommitment={overview.monthlyCommitment}
+            installmentsDue={overview.installmentsDue}
+            freeDate={overview.freeDate}
+            currency={overview.currency}
+          />
           <UpcomingPayments items={upcoming} />
+          <CreditMix
+            credits={summaries.filter((c) => c.status === "active")}
+            totalDebt={overview.totalDebt}
+          />
         </>
       )}
     </div>

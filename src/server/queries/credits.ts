@@ -1,7 +1,7 @@
 import "server-only";
 
 import { createClient } from "@/infrastructure/supabase/server";
-import { todayISO } from "@/lib/dates";
+import { addMonths, todayISO } from "@/lib/dates";
 import type {
   CreditSummary,
   DebtOverview,
@@ -64,6 +64,18 @@ export function buildOverview(summaries: CreditSummary[]): DebtOverview {
   );
   const overdueCount = active.reduce((s, c) => s + Number(c.overdue_count), 0);
 
+  // Cuándo se paga la última cuota del portafolio. El plan es mensual, así que
+  // basta con desplazar la próxima cuota tantos meses como queden por pagar.
+  const freeDate = active.reduce<string | null>((latest, c) => {
+    if (!c.next_due_date) return latest;
+    const remaining = Math.max(
+      0,
+      Number(c.total_installments) - Number(c.paid_installments) - 1,
+    );
+    const last = addMonths(c.next_due_date, remaining);
+    return latest == null || last > latest ? last : latest;
+  }, null);
+
   return {
     totalDebt,
     totalPrincipal,
@@ -72,6 +84,9 @@ export function buildOverview(summaries: CreditSummary[]): DebtOverview {
       ? (totalPrincipalPaid / totalPrincipal) * 100
       : 0,
     monthlyCommitment,
+    installmentsDue: active.filter((c) => c.next_installment_number != null)
+      .length,
+    freeDate,
     overdueCount,
     activeCredits: active.length,
     currency: active[0]?.currency ?? env.defaultCurrency,

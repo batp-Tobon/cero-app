@@ -64,6 +64,9 @@ export interface DebtOverview {
   totalPrincipalPaid: number;
   progressPercent: number;
   monthlyCommitment: number;
+  installmentsDue: number;
+  /** Vencimiento de la última cuota de todo el portafolio. */
+  freeDate: string | null;
   overdueCount: number;
   activeCredits: number;
   currency: string;
