@@ -18,6 +18,11 @@ export type AmortizationSystemDB =
   | "zero_interest";
 
 export type CreditStatusDB = "active" | "paid" | "cancelled";
+export type UserRoleDB = "user" | "admin";
+export type RevolvingKindDB = "credit_card" | "credit_line";
+export type RevolvingStatusDB = "active" | "closed";
+export type StatementStatusDB = "open" | "paid" | "overdue";
+export type MovementKindDB = "charge" | "payment" | "interest" | "fee";
 export type InstallmentStatusDB = "pending" | "partial" | "paid";
 export type ExtraPrincipalModeDB = "reduce_term" | "reduce_installment";
 export type ActivityTypeDB =
@@ -33,6 +38,7 @@ export type ProfileRow = {
   email: string | null;
   full_name: string | null;
   avatar_url: string | null;
+  role: UserRoleDB;
   currency: string;
   locale: string;
   notify_upcoming: boolean;
@@ -71,6 +77,7 @@ export type ScheduleRowDB = {
   interest_amount: number;
   principal_amount: number;
   closing_balance: number;
+  extra_principal_before: number;
   paid_amount: number;
   status: InstallmentStatusDB;
   paid_at: string | null;
@@ -117,6 +124,87 @@ export type NotificationRow = {
   read_at: string | null;
   scheduled_for: string | null;
   created_at: string;
+}
+
+export type CreditMemberRow = {
+  credit_id: string;
+  user_id: string;
+  role: "owner" | "member";
+  created_at: string;
+}
+
+export type RevolvingAccountRow = {
+  id: string;
+  owner_id: string;
+  name: string;
+  kind: RevolvingKindDB;
+  entity: string | null;
+  last_four: string | null;
+  credit_limit: number;
+  interest_rate_monthly: number;
+  statement_day: number;
+  due_day: number;
+  currency: string;
+  status: RevolvingStatusDB;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type RevolvingStatementRow = {
+  id: string;
+  account_id: string;
+  statement_date: string;
+  due_date: string;
+  total_due: number;
+  minimum_due: number;
+  reduced_minimum_due: number | null;
+  paid_amount: number;
+  status: StatementStatusDB;
+  created_at: string;
+  updated_at: string;
+}
+
+export type RevolvingMovementRow = {
+  id: string;
+  account_id: string;
+  statement_id: string | null;
+  user_id: string;
+  kind: MovementKindDB;
+  amount: number;
+  movement_date: string;
+  description: string | null;
+  created_at: string;
+}
+
+/** Vista `revolving_summary` — saldo, disponible y extracto vigente. */
+export type RevolvingSummaryRow = {
+  id: string;
+  owner_id: string;
+  name: string;
+  kind: RevolvingKindDB;
+  entity: string | null;
+  last_four: string | null;
+  credit_limit: number;
+  interest_rate_monthly: number;
+  statement_day: number;
+  due_day: number;
+  currency: string;
+  status: RevolvingStatusDB;
+  created_at: string;
+  balance: number;
+  available: number;
+  total_charged: number;
+  total_paid: number;
+  last_movement_date: string | null;
+  statement_id: string | null;
+  statement_date: string | null;
+  statement_due_date: string | null;
+  statement_total_due: number | null;
+  statement_minimum_due: number | null;
+  statement_reduced_minimum_due: number | null;
+  statement_paid_amount: number | null;
+  statement_status: StatementStatusDB | null;
 }
 
 /** Vista `credit_summary` — resumen sin traer el plan de pagos completo. */
@@ -220,6 +308,45 @@ export type Database = {
           | "payment_id"
         >
       >;
+      credit_members: Table<
+        CreditMemberRow,
+        Insertable<CreditMemberRow, "created_at" | "role">
+      >;
+      revolving_accounts: Table<
+        RevolvingAccountRow,
+        Insertable<
+          RevolvingAccountRow,
+          | Generated
+          | "kind"
+          | "entity"
+          | "last_four"
+          | "interest_rate_monthly"
+          | "statement_day"
+          | "due_day"
+          | "currency"
+          | "status"
+          | "notes"
+        >
+      >;
+      revolving_statements: Table<
+        RevolvingStatementRow,
+        Insertable<
+          RevolvingStatementRow,
+          | Generated
+          | "total_due"
+          | "minimum_due"
+          | "reduced_minimum_due"
+          | "paid_amount"
+          | "status"
+        >
+      >;
+      revolving_movements: Table<
+        RevolvingMovementRow,
+        Insertable<
+          RevolvingMovementRow,
+          "id" | "created_at" | "statement_id" | "movement_date" | "description"
+        >
+      >;
       notifications: Table<
         NotificationRow,
         Insertable<
@@ -230,9 +357,14 @@ export type Database = {
     };
     Views: {
       credit_summary: { Row: CreditSummaryRow; Relationships: [] };
+      revolving_summary: { Row: RevolvingSummaryRow; Relationships: [] };
     };
     Functions: {
       owns_credit: { Args: { p_credit_id: string }; Returns: boolean };
+      can_access_credit: { Args: { p_credit_id: string }; Returns: boolean };
+      is_credit_member: { Args: { p_credit_id: string }; Returns: boolean };
+      owns_revolving: { Args: { p_account_id: string }; Returns: boolean };
+      is_admin: { Args: Record<string, never>; Returns: boolean };
     };
     Enums: {
       credit_type: CreditTypeDB;
@@ -241,6 +373,11 @@ export type Database = {
       installment_status: InstallmentStatusDB;
       extra_principal_mode: ExtraPrincipalModeDB;
       activity_type: ActivityTypeDB;
+      user_role: UserRoleDB;
+      revolving_kind: RevolvingKindDB;
+      revolving_status: RevolvingStatusDB;
+      statement_status: StatementStatusDB;
+      movement_kind: MovementKindDB;
     };
     CompositeTypes: Record<string, never>;
   };

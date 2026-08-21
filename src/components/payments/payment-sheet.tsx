@@ -76,7 +76,6 @@ export function PaymentSheet({
 
     const result = await registerPayment({
       creditId: target.creditId,
-      installmentNumber: target.installmentNumber,
       paymentDate,
       amountPaid: amount,
       extraPrincipal: extra,

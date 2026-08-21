@@ -4,25 +4,20 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createClient, getCurrentUser } from "@/infrastructure/supabase/server";
 import {
-  allocatePayment,
-  recalculateRemaining,
-  type AmortizationSystem,
-  type ExtraPrincipalMode,
-} from "@/core/domain/amortization";
-import {
-  closeCreditIfSettled,
-  getPendingInstallments,
+  loadCredit,
   money,
-  replacePendingTail,
+  rebuildCreditSchedule,
+  type RebuildResult,
 } from "@/server/services/schedule";
-import { addMonths } from "@/lib/dates";
 import { formatMoney } from "@/lib/format";
 import type { ActionResult } from "@/types/domain";
-import type { CreditRow, ScheduleRowDB } from "@/types/database";
+import type { CreditRow } from "@/types/database";
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
-/** Refresca todo lo que depende del saldo de un crédito. */
+/** Ventana en la que dos movimientos idénticos se consideran un doble envío. */
+const DUPLICATE_WINDOW_MS = 30_000;
+
 function revalidateCredit(creditId: string) {
   revalidatePath("/inicio");
   revalidatePath("/creditos");
@@ -30,59 +25,57 @@ function revalidateCredit(creditId: string) {
   revalidatePath("/actividad");
 }
 
-/**
- * Recalcula y persiste la cola del plan tras mover el saldo.
- * Devuelve el saldo con el que queda el crédito.
- */
-async function rewriteTail(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  credit: Pick<
-    CreditRow,
-    "id" | "interest_rate_monthly" | "amortization_system" | "extra_principal_mode"
-  >,
-  anchor: ScheduleRowDB,
-  tail: ScheduleRowDB[],
-  newBalance: number,
-): Promise<void> {
-  if (newBalance <= 0.009) {
-    await closeCreditIfSettled(supabase, credit.id, 0);
-    return;
-  }
+/** Saldo vivo actual: el saldo inicial de la primera cuota sin pagar. */
+async function currentBalance(
+  db: Awaited<ReturnType<typeof createClient>>,
+  credit: CreditRow,
+): Promise<{ balance: number; interestDue: number; installment: number | null }> {
+  const { data, error } = await db
+    .from("credit_schedule")
+    .select("installment_number, opening_balance, interest_amount")
+    .eq("credit_id", credit.id)
+    .neq("status", "paid")
+    .order("installment_number", { ascending: true })
+    .limit(1)
+    .maybeSingle();
 
-  // Si el saldo sobrevive a la última cuota programada (pago parcial en la
-  // cuota final), hay que abrir una cuota más: la deuda no puede quedar sin
-  // fecha de pago.
-  const dueDates =
-    tail.length > 0
-      ? tail.map((r) => r.due_date)
-      : [addMonths(anchor.due_date, 1)];
+  if (error) throw new Error(error.message);
+  if (!data) return { balance: 0, interestDue: 0, installment: null };
 
-  const rows = recalculateRemaining({
-    balance: newBalance,
-    monthlyRate: Number(credit.interest_rate_monthly),
-    system: credit.amortization_system as AmortizationSystem,
-    mode: credit.extra_principal_mode as ExtraPrincipalMode,
-    remainingDueDates: dueDates,
-    startInstallment: anchor.installment_number + 1,
-    currentPayment: Number(anchor.payment_amount),
-    currentPrincipal: Number(anchor.principal_amount),
-  });
+  return {
+    balance: Number(data.opening_balance),
+    interestDue: Number(data.interest_amount),
+    installment: data.installment_number,
+  };
+}
 
-  await replacePendingTail(
-    supabase,
-    credit.id,
-    anchor.installment_number + 1,
-    rows,
-  );
+/** Frena el doble clic sin bloquear un segundo pago legítimo días después. */
+async function isDuplicate(
+  db: Awaited<ReturnType<typeof createClient>>,
+  creditId: string,
+  paymentDate: string,
+  amountPaid: number,
+  extraPrincipal: number,
+): Promise<boolean> {
+  const since = new Date(Date.now() - DUPLICATE_WINDOW_MS).toISOString();
+  const { data } = await db
+    .from("payments")
+    .select("id")
+    .eq("credit_id", creditId)
+    .eq("payment_date", paymentDate)
+    .eq("amount_paid", money(amountPaid))
+    .eq("extra_principal", money(extraPrincipal))
+    .gte("created_at", since)
+    .limit(1);
+  return (data?.length ?? 0) > 0;
 }
 
 // ---------------------------------------------------------------------------
-// Pago de cuota
+// Registrar pago de cuota
 // ---------------------------------------------------------------------------
 
 const paymentSchema = z.object({
   creditId: z.string().uuid(),
-  installmentNumber: z.number().int().positive(),
   paymentDate: z.string().regex(ISO_DATE, "Elige la fecha del pago."),
   amountPaid: z.number().positive("El valor pagado debe ser mayor que cero."),
   extraPrincipal: z.number().min(0).default(0),
@@ -100,9 +93,9 @@ export interface PaymentResultData {
 /**
  * Registra el pago de una cuota.
  *
- * Orden del proceso: validar la cuota, imputar interés y capital, escribir el
- * pago, cerrar la cuota, recalcular el saldo y dejar rastro en actividad.
- * Todo con el servidor como única fuente de verdad.
+ * La cuota que salda NO viene del cliente: la asigna la reconstrucción según
+ * el orden cronológico de los movimientos. Así un pago con fecha atrasada cae
+ * donde le toca y no donde el formulario creyera.
  */
 export async function registerPayment(
   input: PaymentInput,
@@ -118,155 +111,102 @@ export async function registerPayment(
 
   const supabase = await createClient();
 
-  const { data: credit, error: creditError } = await supabase
-    .from("credits")
-    .select("*")
-    .eq("id", value.creditId)
-    .maybeSingle();
-  if (creditError) return { ok: false, error: creditError.message };
-  if (!credit) return { ok: false, error: "No encontramos ese crédito." };
-  if (credit.status !== "active") {
-    return { ok: false, error: "Este crédito ya no está activo." };
-  }
+  try {
+    const credit = await loadCredit(supabase, value.creditId);
+    if (!credit) return { ok: false, error: "No encontramos ese crédito." };
+    if (credit.status === "cancelled") {
+      return { ok: false, error: "Este crédito está cancelado." };
+    }
 
-  const pending = await getPendingInstallments(supabase, value.creditId);
-  if (pending.length === 0) {
-    return { ok: false, error: "Este crédito ya está al día." };
-  }
+    const { balance, interestDue, installment } = await currentBalance(
+      supabase,
+      credit,
+    );
+    if (installment == null) {
+      return { ok: false, error: "Este crédito ya está al día." };
+    }
 
-  // Las cuotas se pagan en orden: el saldo de cada una es el cierre de la
-  // anterior, así que saltarse una rompería la cadena.
-  const target = pending[0];
-  if (target.installment_number !== value.installmentNumber) {
-    return {
-      ok: false,
-      error: `Primero tienes que registrar la cuota ${target.installment_number}.`,
-    };
-  }
+    const ceiling = money(balance + interestDue);
+    if (money(value.amountPaid + value.extraPrincipal) > ceiling + 0.009) {
+      return {
+        ok: false,
+        error: `El pago supera la deuda: como máximo puedes aplicar ${formatMoney(
+          ceiling,
+          credit.currency,
+        )}.`,
+      };
+    }
 
-  const opening = Number(target.opening_balance);
-  const allocation = allocatePayment({
-    amount: value.amountPaid,
-    scheduledInterest: Number(target.interest_amount),
-    openingBalance: opening,
-  });
+    if (
+      await isDuplicate(
+        supabase,
+        credit.id,
+        value.paymentDate,
+        value.amountPaid,
+        value.extraPrincipal,
+      )
+    ) {
+      return { ok: false, error: "Ese pago ya se acaba de registrar." };
+    }
 
-  // El sobrante de la cuota se comporta igual que un abono a capital.
-  const requestedExtra = value.extraPrincipal + allocation.surplus;
-  const principalRoom = money(opening - allocation.principalPaid);
+    const { data: payment, error } = await supabase
+      .from("payments")
+      .insert({
+        credit_id: credit.id,
+        user_id: user.id,
+        installment_number: installment,
+        payment_date: value.paymentDate,
+        amount_paid: money(value.amountPaid),
+        principal_paid: 0,
+        interest_paid: 0,
+        extra_principal: money(value.extraPrincipal),
+        balance_after: null,
+        notes: value.notes?.trim() || null,
+      })
+      .select("id")
+      .single();
 
-  if (requestedExtra > principalRoom + 0.009) {
-    return {
-      ok: false,
-      error: `El pago supera la deuda: como máximo puedes abonar ${formatMoney(
-        principalRoom,
-        credit.currency,
-      )} a capital.`,
-    };
-  }
+    if (error) return { ok: false, error: error.message };
 
-  const extraApplied = money(Math.min(requestedExtra, principalRoom));
-  const settledAmount = money(value.amountPaid - allocation.surplus);
-  const newBalance = money(opening - allocation.principalPaid - extraApplied);
+    const result = await rebuildCreditSchedule(supabase, credit);
 
-  const { data: payment, error: paymentError } = await supabase
-    .from("payments")
-    .insert({
-      credit_id: credit.id,
-      user_id: user.id,
-      installment_number: target.installment_number,
-      payment_date: value.paymentDate,
-      amount_paid: settledAmount,
-      principal_paid: money(allocation.principalPaid),
-      interest_paid: money(allocation.interestPaid),
-      extra_principal: extraApplied,
-      balance_after: newBalance,
-      notes: value.notes?.trim() || null,
-    })
-    .select("id")
-    .single();
-
-  if (paymentError) {
-    // El índice único de (credit_id, installment_number) frena el doble envío.
-    const duplicated = paymentError.code === "23505";
-    return {
-      ok: false,
-      error: duplicated
-        ? "Esa cuota ya tiene un pago registrado."
-        : paymentError.message,
-    };
-  }
-
-  const { error: scheduleError } = await supabase
-    .from("credit_schedule")
-    .update({
-      status: "paid",
-      paid_amount: settledAmount,
-      paid_at: new Date().toISOString(),
-    })
-    .eq("id", target.id);
-  if (scheduleError) return { ok: false, error: scheduleError.message };
-
-  // Sólo se reescribe el plan si el saldo se aparta del previsto: un pago
-  // exacto y sin abono deja el cronograma intacto.
-  const followsPlan =
-    extraApplied === 0 &&
-    Math.abs(newBalance - Number(target.closing_balance)) < 0.01;
-
-  if (!followsPlan) {
-    await rewriteTail(supabase, credit, target, pending.slice(1), newBalance);
-  } else if (newBalance <= 0.009) {
-    await closeCreditIfSettled(supabase, credit.id, 0);
-  }
-
-  const settled = newBalance <= 0.009;
-
-  await supabase.from("activity").insert({
-    user_id: user.id,
-    credit_id: credit.id,
-    payment_id: payment.id,
-    type: "payment",
-    title: `Pago de cuota ${target.installment_number}`,
-    description: credit.name,
-    amount: money(settledAmount + extraApplied),
-    occurred_at: new Date(`${value.paymentDate}T12:00:00Z`).toISOString(),
-    metadata: {
-      installment: target.installment_number,
-      interest_paid: allocation.interestPaid,
-      principal_paid: allocation.principalPaid,
-      extra_principal: extraApplied,
-      balance_after: newBalance,
-    },
-  });
-
-  if (settled) {
     await supabase.from("activity").insert({
       user_id: user.id,
       credit_id: credit.id,
-      payment_id: null,
-      type: "credit_paid",
-      title: "Crédito pagado",
-      description: `${credit.name} llegó a cero`,
-      amount: null,
+      payment_id: payment.id,
+      type: "payment",
+      title: `Pago de cuota ${installment}`,
+      description: credit.name,
+      amount: money(value.amountPaid + value.extraPrincipal),
+      occurred_at: new Date(`${value.paymentDate}T12:00:00Z`).toISOString(),
+      metadata: { installment, balance_after: result.balance },
     });
+
+    if (result.settled) {
+      await supabase.from("activity").insert({
+        user_id: user.id,
+        credit_id: credit.id,
+        payment_id: null,
+        type: "credit_paid",
+        title: "Crédito pagado",
+        description: `${credit.name} llegó a cero`,
+        amount: null,
+      });
+    }
+
+    revalidateCredit(credit.id);
+
+    return {
+      ok: true,
+      data: {
+        newBalance: result.balance,
+        creditSettled: result.settled,
+        installmentsLeft: result.installmentsLeft,
+      },
+    };
+  } catch (e) {
+    return { ok: false, error: errorMessage(e) };
   }
-
-  const { count } = await supabase
-    .from("credit_schedule")
-    .select("id", { count: "exact", head: true })
-    .eq("credit_id", credit.id)
-    .neq("status", "paid");
-
-  revalidateCredit(credit.id);
-
-  return {
-    ok: true,
-    data: {
-      newBalance,
-      creditSettled: settled,
-      installmentsLeft: count ?? 0,
-    },
-  };
 }
 
 // ---------------------------------------------------------------------------
@@ -289,10 +229,7 @@ export interface ExtraPrincipalResultData {
   installmentsSaved: number;
 }
 
-/**
- * Registra un abono extraordinario a capital y recalcula el plan según la
- * preferencia del crédito (reducir plazo o reducir cuota).
- */
+/** Registra un abono extraordinario a capital y recalcula el plan. */
 export async function registerExtraPrincipal(
   input: ExtraPrincipalInput,
 ): Promise<ActionResult<ExtraPrincipalResultData>> {
@@ -307,112 +244,230 @@ export async function registerExtraPrincipal(
 
   const supabase = await createClient();
 
-  const { data: credit, error: creditError } = await supabase
-    .from("credits")
-    .select("*")
-    .eq("id", value.creditId)
-    .maybeSingle();
-  if (creditError) return { ok: false, error: creditError.message };
-  if (!credit) return { ok: false, error: "No encontramos ese crédito." };
-  if (credit.status !== "active") {
-    return { ok: false, error: "Este crédito ya no está activo." };
-  }
+  try {
+    const credit = await loadCredit(supabase, value.creditId);
+    if (!credit) return { ok: false, error: "No encontramos ese crédito." };
+    if (credit.status === "cancelled") {
+      return { ok: false, error: "Este crédito está cancelado." };
+    }
 
-  const pending = await getPendingInstallments(supabase, value.creditId);
-  if (pending.length === 0) {
-    return { ok: false, error: "Este crédito ya está pagado." };
-  }
+    const before = await currentBalance(supabase, credit);
+    if (before.installment == null) {
+      return { ok: false, error: "Este crédito ya está pagado." };
+    }
+    if (value.amount > before.balance + 0.009) {
+      return {
+        ok: false,
+        error: `El abono supera el saldo pendiente (${formatMoney(
+          before.balance,
+          credit.currency,
+        )}).`,
+      };
+    }
+    if (
+      await isDuplicate(supabase, credit.id, value.paymentDate, 0, value.amount)
+    ) {
+      return { ok: false, error: "Ese abono ya se acaba de registrar." };
+    }
 
-  const first = pending[0];
-  const balance = Number(first.opening_balance);
+    const { count } = await supabase
+      .from("credit_schedule")
+      .select("id", { count: "exact", head: true })
+      .eq("credit_id", credit.id)
+      .neq("status", "paid");
+    const pendingBefore = count ?? 0;
 
-  if (value.amount > balance + 0.009) {
-    return {
-      ok: false,
-      error: `El abono supera el saldo pendiente (${formatMoney(
-        balance,
-        credit.currency,
-      )}).`,
-    };
-  }
+    const { data: payment, error } = await supabase
+      .from("payments")
+      .insert({
+        credit_id: credit.id,
+        user_id: user.id,
+        installment_number: null,
+        payment_date: value.paymentDate,
+        amount_paid: 0,
+        principal_paid: 0,
+        interest_paid: 0,
+        extra_principal: money(value.amount),
+        balance_after: null,
+        notes: value.notes?.trim() || null,
+      })
+      .select("id")
+      .single();
 
-  const amount = money(Math.min(value.amount, balance));
-  const newBalance = money(balance - amount);
+    if (error) return { ok: false, error: error.message };
 
-  const { data: payment, error: paymentError } = await supabase
-    .from("payments")
-    .insert({
-      credit_id: credit.id,
-      user_id: user.id,
-      installment_number: null,
-      payment_date: value.paymentDate,
-      amount_paid: 0,
-      principal_paid: 0,
-      interest_paid: 0,
-      extra_principal: amount,
-      balance_after: newBalance,
-      notes: value.notes?.trim() || null,
-    })
-    .select("id")
-    .single();
-
-  if (paymentError) return { ok: false, error: paymentError.message };
-
-  if (newBalance <= 0.009) {
-    await closeCreditIfSettled(supabase, credit.id, 0);
-  } else {
-    const rows = recalculateRemaining({
-      balance: newBalance,
-      monthlyRate: Number(credit.interest_rate_monthly),
-      system: credit.amortization_system as AmortizationSystem,
-      mode: credit.extra_principal_mode as ExtraPrincipalMode,
-      remainingDueDates: pending.map((r) => r.due_date),
-      startInstallment: first.installment_number,
-      currentPayment: Number(first.payment_amount),
-      currentPrincipal: Number(first.principal_amount),
-    });
-    await replacePendingTail(
-      supabase,
-      credit.id,
-      first.installment_number,
-      rows,
+    const result = await rebuildCreditSchedule(supabase, credit);
+    const installmentsSaved = Math.max(
+      0,
+      pendingBefore - result.installmentsLeft,
     );
+
+    await supabase.from("activity").insert({
+      user_id: user.id,
+      credit_id: credit.id,
+      payment_id: payment.id,
+      type: "extra_principal",
+      title: "Abono a capital",
+      description: credit.name,
+      amount: money(value.amount),
+      occurred_at: new Date(`${value.paymentDate}T12:00:00Z`).toISOString(),
+      metadata: {
+        balance_after: result.balance,
+        installments_saved: installmentsSaved,
+        mode: credit.extra_principal_mode,
+      },
+    });
+
+    revalidateCredit(credit.id);
+
+    return {
+      ok: true,
+      data: {
+        newBalance: result.balance,
+        creditSettled: result.settled,
+        installmentsLeft: result.installmentsLeft,
+        installmentsSaved,
+      },
+    };
+  } catch (e) {
+    return { ok: false, error: errorMessage(e) };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Corregir un movimiento
+// ---------------------------------------------------------------------------
+
+const editSchema = z.object({
+  paymentId: z.string().uuid(),
+  paymentDate: z.string().regex(ISO_DATE, "Elige la fecha."),
+  amountPaid: z.number().min(0),
+  extraPrincipal: z.number().min(0),
+  notes: z.string().trim().max(300).optional().nullable(),
+});
+
+export type EditPaymentInput = z.input<typeof editSchema>;
+
+/**
+ * Corrige un movimiento ya registrado.
+ *
+ * Cambiar un pago de hace seis meses altera todo lo que vino después, así que
+ * no se parchea nada: se reconstruye el plan entero desde el historial nuevo.
+ */
+export async function updatePayment(
+  input: EditPaymentInput,
+): Promise<ActionResult<RebuildResult>> {
+  const parsed = editSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0].message };
+  }
+  const value = parsed.data;
+
+  if (value.amountPaid + value.extraPrincipal <= 0) {
+    return { ok: false, error: "El movimiento debe tener algún importe." };
   }
 
-  const { count } = await supabase
-    .from("credit_schedule")
-    .select("id", { count: "exact", head: true })
-    .eq("credit_id", credit.id)
-    .neq("status", "paid");
+  const user = await getCurrentUser();
+  if (!user) return { ok: false, error: "Tu sesión expiró." };
 
-  const installmentsLeft = count ?? 0;
-  const installmentsSaved = Math.max(0, pending.length - installmentsLeft);
+  const supabase = await createClient();
 
-  await supabase.from("activity").insert({
-    user_id: user.id,
-    credit_id: credit.id,
-    payment_id: payment.id,
-    type: "extra_principal",
-    title: "Abono a capital",
-    description: credit.name,
-    amount,
-    occurred_at: new Date(`${value.paymentDate}T12:00:00Z`).toISOString(),
-    metadata: {
-      balance_after: newBalance,
-      installments_saved: installmentsSaved,
-      mode: credit.extra_principal_mode,
-    },
-  });
+  try {
+    const { data: existing, error: loadError } = await supabase
+      .from("payments")
+      .select("id, credit_id")
+      .eq("id", value.paymentId)
+      .maybeSingle();
+    if (loadError) return { ok: false, error: loadError.message };
+    if (!existing) return { ok: false, error: "No encontramos ese movimiento." };
 
-  revalidateCredit(credit.id);
+    const credit = await loadCredit(supabase, existing.credit_id);
+    if (!credit) return { ok: false, error: "No encontramos ese crédito." };
 
-  return {
-    ok: true,
-    data: {
-      newBalance,
-      creditSettled: newBalance <= 0.009,
-      installmentsLeft,
-      installmentsSaved,
-    },
-  };
+    const { error } = await supabase
+      .from("payments")
+      .update({
+        payment_date: value.paymentDate,
+        amount_paid: money(value.amountPaid),
+        extra_principal: money(value.extraPrincipal),
+        notes: value.notes?.trim() || null,
+      })
+      .eq("id", value.paymentId);
+    if (error) return { ok: false, error: error.message };
+
+    const result = await rebuildCreditSchedule(supabase, credit);
+
+    await supabase.from("activity").insert({
+      user_id: user.id,
+      credit_id: credit.id,
+      payment_id: value.paymentId,
+      type: "credit_updated",
+      title: "Movimiento corregido",
+      description: credit.name,
+      amount: money(value.amountPaid + value.extraPrincipal),
+      metadata: { balance_after: result.balance },
+    });
+
+    revalidateCredit(credit.id);
+    return { ok: true, data: result };
+  } catch (e) {
+    return { ok: false, error: errorMessage(e) };
+  }
+}
+
+/** Elimina un movimiento y vuelve a derivar el plan sin él. */
+export async function deletePayment(
+  paymentId: string,
+): Promise<ActionResult<RebuildResult>> {
+  const user = await getCurrentUser();
+  if (!user) return { ok: false, error: "Tu sesión expiró." };
+
+  const supabase = await createClient();
+
+  try {
+    const { data: existing, error: loadError } = await supabase
+      .from("payments")
+      .select("id, credit_id, amount_paid, extra_principal")
+      .eq("id", paymentId)
+      .maybeSingle();
+    if (loadError) return { ok: false, error: loadError.message };
+    if (!existing) return { ok: false, error: "No encontramos ese movimiento." };
+
+    const credit = await loadCredit(supabase, existing.credit_id);
+    if (!credit) return { ok: false, error: "No encontramos ese crédito." };
+
+    // La actividad enlazada se queda sin pago (ON DELETE SET NULL); se borra
+    // para que el historial no muestre un movimiento que ya no existe.
+    await supabase.from("activity").delete().eq("payment_id", paymentId);
+
+    const { error } = await supabase
+      .from("payments")
+      .delete()
+      .eq("id", paymentId);
+    if (error) return { ok: false, error: error.message };
+
+    const result = await rebuildCreditSchedule(supabase, credit);
+
+    await supabase.from("activity").insert({
+      user_id: user.id,
+      credit_id: credit.id,
+      payment_id: null,
+      type: "credit_updated",
+      title: "Movimiento eliminado",
+      description: credit.name,
+      amount: money(
+        Number(existing.amount_paid) + Number(existing.extra_principal),
+      ),
+      metadata: { balance_after: result.balance },
+    });
+
+    revalidateCredit(credit.id);
+    return { ok: true, data: result };
+  } catch (e) {
+    return { ok: false, error: errorMessage(e) };
+  }
+}
+
+function errorMessage(e: unknown): string {
+  return e instanceof Error ? e.message : "No pudimos completar la operación.";
 }

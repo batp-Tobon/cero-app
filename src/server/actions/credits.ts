@@ -3,8 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createClient, getCurrentUser } from "@/infrastructure/supabase/server";
-import { buildSchedule } from "@/core/domain/amortization";
-import { insertSchedule } from "@/server/services/schedule";
+import { rebuildCreditSchedule } from "@/server/services/schedule";
 import { creditTypeLabel } from "@/lib/constants";
 import { formatMoney } from "@/lib/format";
 import type { ActionResult } from "@/types/domain";
@@ -82,23 +81,18 @@ export async function createCredit(
       status: "active",
       notes: value.notes?.trim() || null,
     })
-    .select("id")
+    .select("*")
     .single();
 
   if (error || !credit) {
     return { ok: false, error: error?.message ?? "No pudimos crear el crédito." };
   }
 
-  const rows = buildSchedule({
-    principal: value.principalAmount,
-    monthlyRate: rate,
-    termMonths: value.termMonths,
-    system: value.amortizationSystem,
-    firstPaymentDate: value.firstPaymentDate,
-  });
-
+  // Sin pagos todavía, la reconstrucción produce exactamente el plan original.
+  // Usar la misma función que el resto de operaciones evita que existan dos
+  // caminos distintos para generar un cronograma.
   try {
-    await insertSchedule(supabase, credit.id, rows);
+    await rebuildCreditSchedule(supabase, credit);
   } catch (e) {
     // Sin plan de pagos el crédito no sirve de nada: se deshace la creación
     // para no dejar un registro a medias.

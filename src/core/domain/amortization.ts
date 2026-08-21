@@ -326,3 +326,260 @@ export function allocatePayment(input: AllocationInput): Allocation {
     surplus: fromCents(surplus),
   };
 }
+
+// ---------------------------------------------------------------------------
+// Reconstrucción del plan a partir del historial de pagos
+// ---------------------------------------------------------------------------
+
+/** Un movimiento tal y como lo registró el usuario. */
+export interface PaymentEvent {
+  /** Identificador del pago; se devuelve en la imputación resultante. */
+  id?: string;
+  /** Fecha del movimiento — determina el orden de aplicación. */
+  date: DateISO;
+  /** `true` si salda una cuota; `false` si es un abono a capital suelto. */
+  settlesInstallment: boolean;
+  /** Efectivo aplicado a la cuota. */
+  amountPaid: number;
+  /** Abono extraordinario a capital. */
+  extraPrincipal: number;
+}
+
+export interface ReplayedRow extends ScheduleRow {
+  paid: boolean;
+  paidAmount: number;
+  /**
+   * Abono a capital aplicado ENTRE la cuota anterior y ésta.
+   *
+   * Sin este dato el plan mostraría un salto inexplicable: el saldo baja más
+   * de lo que amortizó la cuota previa. Con él se cumple
+   *   `opening[i] === closing[i-1] − extraPrincipalBefore[i]`
+   * y la pantalla puede rotular el abono donde de verdad ocurrió.
+   */
+  extraPrincipalBefore: number;
+}
+
+/** Imputación real de un pago, recalculada sobre el plan vigente. */
+export interface EventAllocation {
+  id?: string;
+  installment: number | null;
+  interestPaid: number;
+  principalPaid: number;
+  extraPrincipal: number;
+  paidAmount: number;
+  balanceAfter: number;
+}
+
+export interface ReplayResult {
+  rows: ReplayedRow[];
+  allocations: EventAllocation[];
+  /** Movimientos que ya no caben en el plan (por ejemplo, tras saldarlo). */
+  rejected: Array<{ id?: string; reason: string }>;
+  balance: number;
+  settled: boolean;
+}
+
+export interface ReplayInput {
+  principal: number;
+  monthlyRate: number;
+  termMonths: number;
+  system: AmortizationSystem;
+  firstPaymentDate: DateISO;
+  mode: ExtraPrincipalMode;
+  events: PaymentEvent[];
+}
+
+const round2 = (n: number): number => fromCents(toCents(n));
+
+/**
+ * Regenera la cola del plan a partir de `fromIndex`, conservando las fechas de
+ * vencimiento que ya existían.
+ */
+function regenerateTail(
+  rows: ReplayedRow[],
+  fromIndex: number,
+  balance: number,
+  anchor: { payment: number; principal: number },
+  input: ReplayInput,
+): ReplayedRow[] {
+  const head = rows.slice(0, fromIndex);
+  if (balance <= 0.009) return head;
+
+  const tail = rows.slice(fromIndex);
+  // Si el saldo sobrevive a la última cuota programada hay que abrir otra:
+  // una deuda sin fecha de pago no es un plan.
+  const dueDates =
+    tail.length > 0
+      ? tail.map((r) => r.dueDate)
+      : [addMonths(rows[rows.length - 1].dueDate, 1)];
+
+  const next = recalculateRemaining({
+    balance,
+    monthlyRate: input.monthlyRate,
+    system: input.system,
+    mode: input.mode,
+    remainingDueDates: dueDates,
+    startInstallment: head.length + 1,
+    currentPayment: anchor.payment,
+    currentPrincipal: anchor.principal,
+  });
+
+  return [
+    ...head,
+    ...next.map((r) => ({
+      ...r,
+      paid: false,
+      paidAmount: 0,
+      extraPrincipalBefore: 0,
+    })),
+  ];
+}
+
+/**
+ * Reconstruye el plan de pagos completo desde el crédito y su historial.
+ *
+ * Esta es la pieza que permite corregir errores: el plan no se va parcheando
+ * pago a pago, se vuelve a derivar entero. Borrar o editar un movimiento es
+ * simplemente volver a llamar aquí con la lista nueva.
+ *
+ * Las cuotas se reasignan por orden cronológico: si borras el tercer pago de
+ * nueve, los seis siguientes pasan a ser las cuotas 3 a 8. Por eso el número
+ * de cuota que traiga el evento no se usa — manda el orden real de los hechos.
+ */
+export function replaySchedule(input: ReplayInput): ReplayResult {
+  const rate = input.system === "zero_interest" ? 0 : input.monthlyRate;
+
+  let rows: ReplayedRow[] = buildSchedule({
+    principal: input.principal,
+    monthlyRate: rate,
+    termMonths: input.termMonths,
+    system: input.system,
+    firstPaymentDate: input.firstPaymentDate,
+  }).map((r) => ({
+    ...r,
+    paid: false,
+    paidAmount: 0,
+    extraPrincipalBefore: 0,
+  }));
+
+  const allocations: EventAllocation[] = [];
+  const rejected: ReplayResult["rejected"] = [];
+
+  // Cronológico. A igual fecha, la cuota antes que el abono suelto: es el
+  // orden con el que el banco imputa el dinero de ese día.
+  const ordered = [...input.events].sort((a, b) => {
+    if (a.date !== b.date) return a.date.localeCompare(b.date);
+    return Number(b.settlesInstallment) - Number(a.settlesInstallment);
+  });
+
+  for (const event of ordered) {
+    const index = rows.findIndex((r) => !r.paid);
+
+    if (index === -1) {
+      rejected.push({
+        id: event.id,
+        reason: "El crédito ya estaba saldado en esa fecha.",
+      });
+      continue;
+    }
+
+    const row = rows[index];
+
+    if (event.settlesInstallment) {
+      const allocation = allocatePayment({
+        amount: event.amountPaid,
+        scheduledInterest: row.interest,
+        openingBalance: row.openingBalance,
+      });
+
+      const room = round2(row.openingBalance - allocation.principalPaid);
+      const extraApplied = Math.min(
+        round2(event.extraPrincipal + allocation.surplus),
+        room,
+      );
+      const settledAmount = round2(event.amountPaid - allocation.surplus);
+      const balanceAfter = round2(
+        row.openingBalance - allocation.principalPaid - extraApplied,
+      );
+
+      // La cuota pagada deja de ser una previsión y pasa a ser un hecho:
+      // se guarda lo que realmente se imputó.
+      const paidRow: ReplayedRow = {
+        ...row,
+        paid: true,
+        paidAmount: settledAmount,
+        interest: allocation.interestPaid,
+        principal: round2(allocation.principalPaid + extraApplied),
+        payment: round2(settledAmount + extraApplied),
+        closingBalance: balanceAfter,
+      };
+      rows = [...rows.slice(0, index), paidRow, ...rows.slice(index + 1)];
+
+      allocations.push({
+        id: event.id,
+        installment: row.installment,
+        interestPaid: allocation.interestPaid,
+        principalPaid: allocation.principalPaid,
+        extraPrincipal: extraApplied,
+        paidAmount: settledAmount,
+        balanceAfter,
+      });
+
+      const followsPlan =
+        extraApplied === 0 &&
+        Math.abs(balanceAfter - row.closingBalance) < 0.01;
+
+      if (!followsPlan) {
+        rows = regenerateTail(
+          rows,
+          index + 1,
+          balanceAfter,
+          { payment: row.payment, principal: row.principal },
+          { ...input, monthlyRate: rate },
+        );
+      }
+    } else {
+      const amount = Math.min(round2(event.extraPrincipal), row.openingBalance);
+      const balanceAfter = round2(row.openingBalance - amount);
+
+      allocations.push({
+        id: event.id,
+        installment: null,
+        interestPaid: 0,
+        principalPaid: 0,
+        extraPrincipal: amount,
+        paidAmount: 0,
+        balanceAfter,
+      });
+
+      const carried = row.extraPrincipalBefore;
+      rows = regenerateTail(
+        rows,
+        index,
+        balanceAfter,
+        { payment: row.payment, principal: row.principal },
+        { ...input, monthlyRate: rate },
+      );
+
+      // El abono se anota en la cuota que queda por delante: ahí es donde el
+      // saldo da el salto y donde hay que explicarlo.
+      if (rows[index]) {
+        rows[index] = {
+          ...rows[index],
+          extraPrincipalBefore: round2(carried + amount),
+        };
+      }
+    }
+  }
+
+  const firstUnpaid = rows.find((r) => !r.paid);
+  const balance = firstUnpaid ? firstUnpaid.openingBalance : 0;
+
+  return {
+    rows,
+    allocations,
+    rejected,
+    balance,
+    settled: balance <= 0.009,
+  };
+}

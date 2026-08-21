@@ -1,103 +1,166 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { Database, ScheduleRowDB } from "@/types/database";
-import type { ScheduleRow } from "@/core/domain/amortization";
+import type { Database, CreditRow, PaymentRow } from "@/types/database";
+import {
+  replaySchedule,
+  type AmortizationSystem,
+  type ExtraPrincipalMode,
+  type ReplayResult,
+} from "@/core/domain/amortization";
 
 type DB = SupabaseClient<Database>;
 
 /** Redondeo a dos decimales: la BD guarda numeric(16,2). */
-const money = (n: number): number => Math.round(n * 100) / 100;
+export const money = (n: number): number => Math.round(n * 100) / 100;
 
-function toInsert(creditId: string, row: ScheduleRow) {
-  return {
-    credit_id: creditId,
-    installment_number: row.installment,
-    due_date: row.dueDate,
-    opening_balance: money(row.openingBalance),
-    payment_amount: money(row.payment),
-    interest_amount: money(row.interest),
-    principal_amount: money(row.principal),
-    closing_balance: money(row.closingBalance),
-  };
-}
-
-/** Escribe un plan de pagos recién generado. */
-export async function insertSchedule(
-  db: DB,
-  creditId: string,
-  rows: ScheduleRow[],
-): Promise<void> {
-  if (rows.length === 0) return;
-  const { error } = await db
-    .from("credit_schedule")
-    .insert(rows.map((r) => toInsert(creditId, r)));
-  if (error) throw new Error(error.message);
+export interface RebuildResult {
+  balance: number;
+  settled: boolean;
+  installmentsLeft: number;
+  installmentsPaid: number;
+  rejected: ReplayResult["rejected"];
 }
 
 /**
- * Sustituye la cola pendiente del plan por otra recalculada.
+ * Vuelve a derivar el plan de pagos completo desde el crédito y su historial.
  *
- * Se borra y se reinserta en vez de actualizar fila a fila porque un abono a
- * capital puede cambiar el NÚMERO de cuotas, no sólo sus importes: al reducir
- * plazo sobran filas que ya no existen en el plan nuevo.
+ * Es la ÚNICA función que escribe en `credit_schedule`. Todo lo que mueve
+ * dinero (registrar, editar o borrar un pago) termina llamando aquí, así que
+ * el plan nunca puede quedar desincronizado de los movimientos.
  *
- * Sólo toca cuotas no pagadas: el histórico es inmutable.
+ * Reescribe el plan entero en vez de parchear filas: con 72 cuotas el coste es
+ * irrelevante y a cambio desaparece toda una familia de estados corruptos.
  */
-export async function replacePendingTail(
+export async function rebuildCreditSchedule(
   db: DB,
-  creditId: string,
-  fromInstallment: number,
-  rows: ScheduleRow[],
-): Promise<void> {
-  const { error: deleteError } = await db
-    .from("credit_schedule")
-    .delete()
-    .eq("credit_id", creditId)
-    .gte("installment_number", fromInstallment)
-    .neq("status", "paid");
-  if (deleteError) throw new Error(deleteError.message);
-
-  await insertSchedule(db, creditId, rows);
-}
-
-/** Cuotas pendientes de un crédito, en orden. */
-export async function getPendingInstallments(
-  db: DB,
-  creditId: string,
-): Promise<ScheduleRowDB[]> {
-  const { data, error } = await db
-    .from("credit_schedule")
+  credit: CreditRow,
+): Promise<RebuildResult> {
+  const { data: payments, error: paymentsError } = await db
+    .from("payments")
     .select("*")
-    .eq("credit_id", creditId)
-    .neq("status", "paid")
-    .order("installment_number", { ascending: true });
-  if (error) throw new Error(error.message);
-  return data ?? [];
-}
+    .eq("credit_id", credit.id)
+    .order("payment_date", { ascending: true })
+    .order("created_at", { ascending: true });
 
-/** Deja el crédito como pagado cuando ya no queda saldo. */
-export async function closeCreditIfSettled(
-  db: DB,
-  creditId: string,
-  balance: number,
-): Promise<boolean> {
-  if (balance > 0.009) return false;
+  if (paymentsError) throw new Error(paymentsError.message);
 
-  // Sin saldo no puede quedar plan pendiente: se limpia antes de cerrar.
+  const history = (payments ?? []) as PaymentRow[];
+
+  const replay = replaySchedule({
+    principal: Number(credit.principal_amount),
+    monthlyRate: Number(credit.interest_rate_monthly),
+    termMonths: credit.term_months,
+    system: credit.amortization_system as AmortizationSystem,
+    firstPaymentDate: credit.first_payment_date,
+    mode: credit.extra_principal_mode as ExtraPrincipalMode,
+    events: history.map((p) => ({
+      id: p.id,
+      date: p.payment_date,
+      // Un movimiento sin cuota asociada es un abono a capital suelto.
+      settlesInstallment: Number(p.amount_paid) > 0,
+      amountPaid: Number(p.amount_paid),
+      extraPrincipal: Number(p.extra_principal),
+    })),
+  });
+
+  // Momento en que se registró cada pago, para conservar `paid_at`.
+  const registeredAt = new Map(history.map((p) => [p.id, p.created_at]));
+
+  // --- Plan de pagos -------------------------------------------------------
   const { error: deleteError } = await db
     .from("credit_schedule")
     .delete()
-    .eq("credit_id", creditId)
-    .neq("status", "paid");
+    .eq("credit_id", credit.id);
   if (deleteError) throw new Error(deleteError.message);
 
-  const { error } = await db
-    .from("credits")
-    .update({ status: "paid" })
-    .eq("id", creditId);
-  if (error) throw new Error(error.message);
-  return true;
+  const paidByInstallment = new Map(
+    replay.allocations
+      .filter((a) => a.installment != null)
+      .map((a) => [a.installment as number, a]),
+  );
+
+  if (replay.rows.length > 0) {
+    const { error: insertError } = await db.from("credit_schedule").insert(
+      replay.rows.map((row) => {
+        const allocation = paidByInstallment.get(row.installment);
+        return {
+          credit_id: credit.id,
+          installment_number: row.installment,
+          due_date: row.dueDate,
+          opening_balance: money(row.openingBalance),
+          payment_amount: money(row.payment),
+          interest_amount: money(row.interest),
+          principal_amount: money(row.principal),
+          closing_balance: money(row.closingBalance),
+          extra_principal_before: money(row.extraPrincipalBefore),
+          paid_amount: money(row.paidAmount),
+          status: row.paid ? ("paid" as const) : ("pending" as const),
+          paid_at:
+            row.paid && allocation?.id
+              ? (registeredAt.get(allocation.id) ?? null)
+              : null,
+        };
+      }),
+    );
+    if (insertError) throw new Error(insertError.message);
+  }
+
+  // --- Imputación de cada pago --------------------------------------------
+  // Dos pasadas: al renumerar, un pago puede tomar el número que otro todavía
+  // ocupa. Se vacían primero y se asignan después.
+  if (history.length > 0) {
+    const { error: clearError } = await db
+      .from("payments")
+      .update({ installment_number: null })
+      .eq("credit_id", credit.id);
+    if (clearError) throw new Error(clearError.message);
+  }
+
+  for (const allocation of replay.allocations) {
+    if (!allocation.id) continue;
+    const { error } = await db
+      .from("payments")
+      .update({
+        installment_number: allocation.installment,
+        principal_paid: money(allocation.principalPaid),
+        interest_paid: money(allocation.interestPaid),
+        extra_principal: money(allocation.extraPrincipal),
+        balance_after: money(allocation.balanceAfter),
+      })
+      .eq("id", allocation.id);
+    if (error) throw new Error(error.message);
+  }
+
+  // --- Estado del crédito --------------------------------------------------
+  const nextStatus = replay.settled ? "paid" : "active";
+  if (credit.status !== nextStatus && credit.status !== "cancelled") {
+    const { error } = await db
+      .from("credits")
+      .update({ status: nextStatus })
+      .eq("id", credit.id);
+    if (error) throw new Error(error.message);
+  }
+
+  return {
+    balance: money(replay.balance),
+    settled: replay.settled,
+    installmentsLeft: replay.rows.filter((r) => !r.paid).length,
+    installmentsPaid: replay.rows.filter((r) => r.paid).length,
+    rejected: replay.rejected,
+  };
 }
 
-export { money };
+/** Carga un crédito comprobando que el usuario puede verlo (vía RLS). */
+export async function loadCredit(
+  db: DB,
+  creditId: string,
+): Promise<CreditRow | null> {
+  const { data, error } = await db
+    .from("credits")
+    .select("*")
+    .eq("id", creditId)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return data;
+}

@@ -27,6 +27,7 @@ export default async function ProfilePage() {
     email: user.email ?? null,
     full_name: user.email?.split("@")[0] ?? null,
     avatar_url: null,
+    role: "user",
     currency: "COP",
     locale: "es-CO",
     notify_upcoming: true,
