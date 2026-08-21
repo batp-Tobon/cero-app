@@ -1,8 +1,10 @@
 import Link from "next/link";
 import type { Metadata } from "next";
-import { Plus, Wallet } from "lucide-react";
+import { CreditCard, Plus, Wallet } from "lucide-react";
 import { getCreditSummaries } from "@/server/queries/credits";
-import { CreditCard } from "@/components/credits/credit-card";
+import { getRevolvingSummaries } from "@/server/queries/revolving";
+import { CreditCard as CreditItem } from "@/components/credits/credit-card";
+import { RevolvingCard } from "@/components/revolving/revolving-card";
 import { PageHeader } from "@/components/layout/page-header";
 import { EmptyState, ErrorState } from "@/components/common/states";
 import { formatMoney } from "@/lib/format";
@@ -11,8 +13,12 @@ export const metadata: Metadata = { title: "Créditos" };
 
 export default async function CreditsPage() {
   let summaries;
+  let cards;
   try {
-    summaries = await getCreditSummaries();
+    [summaries, cards] = await Promise.all([
+      getCreditSummaries(),
+      getRevolvingSummaries(),
+    ]);
   } catch (error) {
     return (
       <ErrorState detail={error instanceof Error ? error.message : undefined} />
@@ -21,16 +27,19 @@ export default async function CreditsPage() {
 
   const active = summaries.filter((c) => c.status === "active");
   const settled = summaries.filter((c) => c.status !== "active");
-  const totalBalance = active.reduce((s, c) => s + Number(c.balance), 0);
+  const activeCards = cards.filter((c) => c.status === "active");
+  const totalBalance =
+    active.reduce((s, c) => s + Number(c.balance), 0) +
+    activeCards.reduce((s, c) => s + Number(c.balance), 0);
+  const currency = active[0]?.currency ?? activeCards[0]?.currency ?? "COP";
+  const isEmpty = summaries.length === 0 && cards.length === 0;
 
   return (
     <div className="animate-fade-in">
       <PageHeader
         title="Créditos"
         subtitle={
-          active.length > 0
-            ? `${formatMoney(totalBalance, active[0].currency)} pendientes`
-            : undefined
+          isEmpty ? undefined : `${formatMoney(totalBalance, currency)} pendientes`
         }
         action={
           <Link
@@ -43,11 +52,11 @@ export default async function CreditsPage() {
         }
       />
 
-      {summaries.length === 0 ? (
+      {isEmpty ? (
         <EmptyState
           icon={Wallet}
-          title="Todavía no tienes créditos"
-          description="Añade uno y CERO genera el plan de pagos completo: cuota, intereses, fechas y saldo."
+          title="Todavía no tienes productos"
+          description="Añade un crédito y CERO genera el plan de pagos completo: cuota, intereses, fechas y saldo."
           actionLabel="Crear crédito"
           actionHref="/creditos/nuevo"
           className="mt-16"
@@ -55,8 +64,38 @@ export default async function CreditsPage() {
       ) : (
         <div className="mt-5 space-y-2.5">
           {active.map((credit) => (
-            <CreditCard key={credit.id} credit={credit} />
+            <CreditItem key={credit.id} credit={credit} />
           ))}
+
+          <section aria-labelledby="cards" className="pt-5">
+            <div className="flex items-baseline justify-between gap-3">
+              <h2
+                id="cards"
+                className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground"
+              >
+                Tarjetas y cupos
+              </h2>
+              <Link
+                href="/tarjetas/nueva"
+                className="text-xs font-semibold text-primary hover:underline"
+              >
+                Añadir
+              </Link>
+            </div>
+
+            {activeCards.length === 0 ? (
+              <p className="mt-3 flex items-center gap-2.5 rounded-2xl bg-card p-4 text-sm text-muted-foreground">
+                <CreditCard className="h-4 w-4 shrink-0" aria-hidden />
+                Registra una tarjeta para seguir su cupo y su pago mínimo.
+              </p>
+            ) : (
+              <div className="mt-3 space-y-2.5">
+                {activeCards.map((card) => (
+                  <RevolvingCard key={card.id} account={card} />
+                ))}
+              </div>
+            )}
+          </section>
 
           {settled.length > 0 && (
             <>
@@ -64,7 +103,7 @@ export default async function CreditsPage() {
                 Terminados
               </h2>
               {settled.map((credit) => (
-                <CreditCard key={credit.id} credit={credit} />
+                <CreditItem key={credit.id} credit={credit} />
               ))}
             </>
           )}
