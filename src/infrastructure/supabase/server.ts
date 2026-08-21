@@ -2,7 +2,7 @@ import { cache } from "react";
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import type { Database, ProfileRow } from "@/types/database";
-import { env } from "@/lib/env";
+import { env, isSupabaseConfigured } from "@/lib/env";
 
 type CookieToSet = { name: string; value: string; options: CookieOptions };
 
@@ -34,8 +34,15 @@ export const createClient = cache(async () => {
   });
 });
 
-/** Usuario autenticado (o null), deduplicado por request. */
+/**
+ * Usuario autenticado (o null), deduplicado por request.
+ *
+ * Sin Supabase configurado devuelve null en vez de reventar: la app recien
+ * clonada tiene que poder arrancar y llevarte al login, que es donde se
+ * explica que faltan las variables de entorno.
+ */
 export const getCurrentUser = cache(async () => {
+  if (!isSupabaseConfigured()) return null;
   const supabase = await createClient();
   const {
     data: { user },
