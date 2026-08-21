@@ -11,6 +11,7 @@ import {
   LifeBuoy,
   Loader2,
   LogOut,
+  Shield,
   ShieldCheck,
   UserRound,
   type LucideIcon,
@@ -38,6 +39,7 @@ type Panel = "profile" | "notifications" | "export" | "security" | null;
 
 export function ProfileSettings({ profile }: { profile: Profile }) {
   const [panel, setPanel] = React.useState<Panel>(null);
+  const isAdmin = profile.role === "admin";
 
   return (
     <>
@@ -72,6 +74,14 @@ export function ProfileSettings({ profile }: { profile: Profile }) {
           hint="Cómo funciona CERO"
           href="/ayuda"
         />
+        {isAdmin && (
+          <Row
+            icon={Shield}
+            label="Administración"
+            hint="Usuarios, roles y créditos"
+            href="/admin"
+          />
+        )}
       </ul>
 
       <SignOutButton />
