@@ -19,6 +19,7 @@ export function DebtSummary({ overview }: { overview: DebtOverview }) {
     totalPrincipalPaid,
     progressPercent,
     overdueCount,
+    revolvingDebt,
     currency,
   } = overview;
 
@@ -29,7 +30,18 @@ export function DebtSummary({ overview }: { overview: DebtOverview }) {
       <p className="tabular mt-2 text-[2.6rem] font-bold leading-none tracking-tight">
         {formatMoney(totalDebt, currency)}
       </p>
-      <p className="mt-2 text-sm text-muted-foreground">deuda pendiente</p>
+      <p className="mt-2 text-sm text-muted-foreground">
+        deuda pendiente
+        {revolvingDebt > 0 && (
+          <>
+            {" · incluye "}
+            <span className="tabular">
+              {formatMoney(revolvingDebt, currency)}
+            </span>{" "}
+            en tarjetas
+          </>
+        )}
+      </p>
 
       <div className="mt-6 space-y-2">
         <p className="text-sm font-semibold text-primary">
@@ -41,7 +53,7 @@ export function DebtSummary({ overview }: { overview: DebtOverview }) {
         />
         <p className="tabular text-xs text-muted-foreground">
           {formatMoney(totalPrincipalPaid, currency)} pagados de{" "}
-          {formatCompactMoney(totalPrincipal, currency)}
+          {formatCompactMoney(totalPrincipal, currency)} en créditos
         </p>
       </div>
 

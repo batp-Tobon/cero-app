@@ -59,7 +59,10 @@ export interface UpcomingPayment extends PaymentTarget {
 
 /** Cabecera del dashboard: las cinco preguntas que la app debe responder. */
 export interface DebtOverview {
+  /** Créditos amortizados + saldo usado de tarjetas. */
   totalDebt: number;
+  creditDebt: number;
+  revolvingDebt: number;
   totalPrincipal: number;
   totalPrincipalPaid: number;
   progressPercent: number;

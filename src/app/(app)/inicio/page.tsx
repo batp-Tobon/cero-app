@@ -6,6 +6,7 @@ import {
   buildUpcomingPayments,
   getCreditSummaries,
 } from "@/server/queries/credits";
+import { getRevolvingSummaries } from "@/server/queries/revolving";
 import { DebtSummary } from "@/components/dashboard/debt-summary";
 import { UpcomingPayments } from "@/components/dashboard/upcoming-payments";
 import { MonthSummary } from "@/components/dashboard/month-summary";
@@ -21,8 +22,12 @@ export default async function DashboardPage() {
   const profile = await getCurrentProfile();
 
   let summaries;
+  let cards;
   try {
-    summaries = await getCreditSummaries();
+    [summaries, cards] = await Promise.all([
+      getCreditSummaries(),
+      getRevolvingSummaries(),
+    ]);
   } catch (error) {
     return (
       <ErrorState
@@ -32,7 +37,7 @@ export default async function DashboardPage() {
     );
   }
 
-  const overview = buildOverview(summaries);
+  const overview = buildOverview(summaries, cards);
   const upcoming = buildUpcomingPayments(summaries);
   const name = firstName(profile?.full_name) || "de nuevo";
 
@@ -49,7 +54,7 @@ export default async function DashboardPage() {
         />
       </header>
 
-      {summaries.length === 0 ? (
+      {summaries.length === 0 && cards.length === 0 ? (
         <EmptyState
           icon={Wallet}
           title="Todavía no tienes créditos"

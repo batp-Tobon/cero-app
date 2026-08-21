@@ -46,10 +46,16 @@ export async function getCreditSummaries(): Promise<CreditSummary[]> {
  * Cabecera del inicio. Se calcula sobre los resúmenes ya cargados para no
  * disparar una segunda consulta por cada cifra de la pantalla.
  */
-export function buildOverview(summaries: CreditSummary[]): DebtOverview {
+export function buildOverview(
+  summaries: CreditSummary[],
+  revolving: Array<{ status: string; balance: number }> = [],
+): DebtOverview {
   const active = summaries.filter((c) => c.status === "active");
 
-  const totalDebt = active.reduce((s, c) => s + Number(c.balance), 0);
+  const creditDebt = active.reduce((s, c) => s + Number(c.balance), 0);
+  const revolvingDebt = revolving
+    .filter((r) => r.status === "active")
+    .reduce((s, r) => s + Number(r.balance), 0);
   const totalPrincipal = active.reduce(
     (s, c) => s + Number(c.principal_amount),
     0,
@@ -77,7 +83,9 @@ export function buildOverview(summaries: CreditSummary[]): DebtOverview {
   }, null);
 
   return {
-    totalDebt,
+    totalDebt: creditDebt + revolvingDebt,
+    creditDebt,
+    revolvingDebt,
     totalPrincipal,
     totalPrincipalPaid,
     progressPercent: totalPrincipal
