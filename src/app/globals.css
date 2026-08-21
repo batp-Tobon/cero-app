@@ -1,0 +1,123 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ---------------------------------------------------------------------------
+   CERO · paleta
+   Un solo tema, oscuro y sobrio. El verde es progreso, el ámbar es atención
+   y el coral es problema: ningún color decora, todos informan.
+   --------------------------------------------------------------------------- */
+@layer base {
+  :root {
+    --background: 206 49% 8%; /* #0B1720 */
+    --foreground: 90 12% 97%; /* #F7F8F6 */
+
+    --card: 202 43% 12%; /* #12232D */
+    --card-foreground: 90 12% 97%;
+
+    --popover: 202 43% 12%;
+    --popover-foreground: 90 12% 97%;
+
+    --secondary: 201 40% 16%; /* #182D38 */
+    --secondary-foreground: 90 12% 97%;
+
+    --muted: 201 40% 16%;
+    --muted-foreground: 202 14% 63%; /* #93A4AE */
+
+    --accent: 201 36% 20%;
+    --accent-foreground: 90 12% 97%;
+
+    --primary: 154 57% 51%; /* #39C98A */
+    --primary-foreground: 206 49% 8%;
+
+    --success: 154 57% 51%;
+    --success-foreground: 206 49% 8%;
+
+    --warning: 40 78% 61%; /* #E9B44C */
+    --warning-foreground: 206 49% 8%;
+
+    --destructive: 13 68% 63%; /* #E07A5F */
+    --destructive-foreground: 206 49% 8%;
+
+    --border: 201 33% 22%;
+    --input: 201 40% 16%;
+    --ring: 154 57% 51%;
+
+    --radius: 1rem;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html {
+    color-scheme: dark;
+    /* El rebote de iOS deja ver el fondo del navegador tras la nav fija. */
+    background-color: hsl(var(--background));
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    -webkit-tap-highlight-color: transparent;
+    overscroll-behavior-y: none;
+  }
+
+  /* Foco visible y consistente en todo lo que se puede accionar. */
+  :focus-visible {
+    @apply outline-none ring-2 ring-ring/60 ring-offset-2 ring-offset-background;
+  }
+
+  /* Los selectores de fecha nativos son ilegibles en oscuro por defecto. */
+  input[type="date"] {
+    color-scheme: dark;
+  }
+  input[type="date"]::-webkit-calendar-picker-indicator {
+    filter: invert(0.7) sepia(1) saturate(3) hue-rotate(105deg);
+    cursor: pointer;
+  }
+
+  /* Importes: los dígitos tabulares evitan que las cifras "bailen". */
+  .tabular {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
+  }
+}
+
+@layer utilities {
+  /* Safe-area (notch, isla dinámica, indicador de inicio).
+     Requiere viewport-fit=cover, configurado en el layout raíz. */
+  .pb-safe {
+    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 0.5rem);
+  }
+  .pt-safe {
+    padding-top: calc(env(safe-area-inset-top, 0px) + 0.5rem);
+  }
+  .px-safe {
+    padding-left: max(1.25rem, env(safe-area-inset-left, 0px));
+    padding-right: max(1.25rem, env(safe-area-inset-right, 0px));
+  }
+  /* Altura que deja libre la navegación inferior fija. */
+  .pb-nav {
+    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 6.5rem);
+  }
+
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
