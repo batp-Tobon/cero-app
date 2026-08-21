@@ -7,12 +7,19 @@ type CookieToSet = { name: string; value: string; options: CookieOptions };
 
 const PROTECTED_PREFIXES = [
   "/inicio",
+  "/tarjetas",
+  "/admin",
   "/creditos",
   "/actividad",
   "/perfil",
   "/api/export",
 ];
-const AUTH_PAGES = ["/login", "/recuperar", "/nueva-contrasena"];
+const AUTH_PAGES = [
+  "/login",
+  "/registro",
+  "/recuperar",
+  "/nueva-contrasena",
+];
 
 /**
  * Refresca la sesion de Supabase en cada request y protege las rutas privadas.

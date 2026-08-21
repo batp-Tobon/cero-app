@@ -130,6 +130,16 @@ export function LoginForm() {
         </div>
       </div>
 
+      <p className="pt-1 text-center text-sm text-muted-foreground">
+        ¿No tienes cuenta?{" "}
+        <Link
+          href="/registro"
+          className="font-semibold text-primary hover:underline"
+        >
+          Crear cuenta
+        </Link>
+      </p>
+
       <Button type="submit" className="w-full" disabled={loading}>
         {loading ? (
           <>
