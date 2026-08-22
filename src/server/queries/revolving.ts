@@ -1,5 +1,6 @@
 import "server-only";
 
+import { cache } from "react";
 import { createClient } from "@/infrastructure/supabase/server";
 import { addMonths, parseISO, todayISO } from "@/lib/dates";
 import type {
@@ -23,15 +24,17 @@ export async function getRevolvingSummaries(): Promise<RevolvingSummary[]> {
   return data ?? [];
 }
 
-export interface RevolvingDetail {
+interface RevolvingDetail {
   account: RevolvingAccountRow;
   summary: RevolvingSummary;
   movements: RevolvingMovementRow[];
 }
 
-export async function getRevolvingDetail(
+/** Igual que el detalle de crédito: `generateMetadata` y el render lo piden
+ *  por separado, y `cache()` evita repetir las tres consultas. */
+export const getRevolvingDetail = cache(async (
   accountId: string,
-): Promise<RevolvingDetail | null> {
+): Promise<RevolvingDetail | null> => {
   const supabase = await createClient();
 
   const [accountRes, summaryRes, movementsRes] = await Promise.all([
@@ -64,23 +67,5 @@ export async function getRevolvingDetail(
     summary: summaryRes.data,
     movements: movementsRes.data ?? [],
   };
-}
+});
 
-/**
- * Próxima fecha límite de pago.
- *
- * Si hay extracto emitido manda su fecha; si no, se proyecta a partir del día
- * de pago configurado. Nunca devuelve una fecha ya pasada.
- */
-export function nextDueDate(
-  account: Pick<RevolvingAccountRow, "due_day">,
-  statementDueDate: string | null,
-  today = todayISO(),
-): string {
-  if (statementDueDate && statementDueDate >= today) return statementDueDate;
-
-  const { year, month } = parseISO(today);
-  const day = String(account.due_day).padStart(2, "0");
-  const candidate = `${year}-${String(month).padStart(2, "0")}-${day}`;
-  return candidate >= today ? candidate : addMonths(candidate, 1);
-}

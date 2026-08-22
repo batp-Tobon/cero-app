@@ -40,7 +40,7 @@ const accountSchema = z.object({
   notes: z.string().trim().max(500).optional().nullable(),
 });
 
-export type RevolvingAccountInput = z.input<typeof accountSchema>;
+type RevolvingAccountInput = z.input<typeof accountSchema>;
 
 /**
  * Crea una tarjeta o cupo rotativo.
@@ -331,30 +331,6 @@ export async function registerMovement(
   };
 }
 
-/** Elimina un movimiento mal registrado. */
-export async function deleteMovement(
-  movementId: string,
-): Promise<ActionResult> {
-  const user = await getCurrentUser();
-  if (!user) return { ok: false, error: "Tu sesión expiró." };
-
-  const supabase = await createClient();
-  const { data: movement } = await supabase
-    .from("revolving_movements")
-    .select("account_id")
-    .eq("id", movementId)
-    .maybeSingle();
-
-  const { error } = await supabase
-    .from("revolving_movements")
-    .delete()
-    .eq("id", movementId);
-
-  if (error) return { ok: false, error: error.message };
-
-  revalidateRevolving(movement?.account_id);
-  return { ok: true, data: undefined };
-}
 
 // ---------------------------------------------------------------------------
 // Extracto
@@ -369,7 +345,7 @@ const statementSchema = z.object({
   reducedMinimumDue: z.number().min(0).optional().nullable(),
 });
 
-export type StatementInput = z.input<typeof statementSchema>;
+type StatementInput = z.input<typeof statementSchema>;
 
 /**
  * Guarda el extracto del corte: total a pagar, mínimo y fecha límite.

@@ -3,7 +3,7 @@
 import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-export interface Option<T extends string> {
+interface Option<T extends string> {
   value: T;
   label: string;
   icon?: LucideIcon;

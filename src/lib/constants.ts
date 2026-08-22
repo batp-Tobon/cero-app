@@ -81,6 +81,3 @@ export const EXTRA_PRINCIPAL_MODES: Array<{
     hint: "Mantienes el plazo y bajas la cuota mensual.",
   },
 ];
-
-/** Días de antelación con los que una cuota se considera "próxima". */
-export const UPCOMING_WINDOW_DAYS = 45;

@@ -143,6 +143,12 @@ suyo aparte. El dueño invita y es el único que puede borrar el crédito.
 conocido, así que vive en `revolving_accounts` con su cupo, sus movimientos y
 sus extractos, en vez de forzarse dentro del motor de amortización.
 
+**La sesión se verifica sin salir a la red.** El middleware llama a
+`auth.getUser()` una vez por request — es la comprobación autoritativa, refresca
+el token y detecta una sesión revocada. Las páginas usan `auth.getClaims()`, que
+valida la firma del JWT en local (0,4 ms frente a 214 ms). Repetir la llamada de
+red en cada pantalla costaba casi medio segundo por carga.
+
 **Los cálculos ocurren en el servidor.** El navegador puede *previsualizar* una
 cuota (con el mismo módulo, para que el número no cambie al confirmar), pero
 sólo las Server Actions escriben.

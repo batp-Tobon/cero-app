@@ -34,20 +34,34 @@ export const createClient = cache(async () => {
   });
 });
 
+/** Lo unico que la app necesita saber de quien esta dentro. */
+type SessionUser = { id: string; email: string | null };
+
 /**
  * Usuario autenticado (o null), deduplicado por request.
  *
- * Sin Supabase configurado devuelve null en vez de reventar: la app recien
- * clonada tiene que poder arrancar y llevarte al login, que es donde se
- * explica que faltan las variables de entorno.
+ * Usa `getClaims()`, que VERIFICA LA FIRMA del token en local contra la clave
+ * publica del proyecto: 0,4 ms frente a los ~214 ms que costaba `getUser()`,
+ * que va por red en cada pagina.
+ *
+ * La comprobacion autoritativa sigue estando: el middleware llama a `getUser()`
+ * en cada request, y ahi es donde se detecta una sesion revocada y se refresca
+ * el token. Aqui basta con confiar en una firma ya validada, porque esa peticion
+ * no habria llegado hasta este punto sin pasar por el middleware.
+ *
+ * Y aunque llegara: las RLS filtran por `auth.uid()` en Postgres, asi que un
+ * token invalido no devuelve datos de nadie.
  */
-export const getCurrentUser = cache(async () => {
+export const getCurrentUser = cache(async (): Promise<SessionUser | null> => {
   if (!isSupabaseConfigured()) return null;
+
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  return user;
+  const { data, error } = await supabase.auth.getClaims();
+  const sub = data?.claims?.sub;
+  if (error || !sub) return null;
+
+  const email = data.claims.email;
+  return { id: sub, email: typeof email === "string" ? email : null };
 });
 
 /** Perfil del usuario actual (o null), deduplicado por request. */

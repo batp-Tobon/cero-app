@@ -19,12 +19,14 @@ import { firstName } from "@/lib/utils";
 export const metadata: Metadata = { title: "Inicio" };
 
 export default async function DashboardPage() {
-  const profile = await getCurrentProfile();
-
+  // Las tres consultas van en paralelo: pedir el perfil primero y esperar a
+  // que vuelva antes de mirar los créditos añadía un viaje de red entero.
+  let profile;
   let summaries;
   let cards;
   try {
-    [summaries, cards] = await Promise.all([
+    [profile, summaries, cards] = await Promise.all([
+      getCurrentProfile(),
       getCreditSummaries(),
       getRevolvingSummaries(),
     ]);

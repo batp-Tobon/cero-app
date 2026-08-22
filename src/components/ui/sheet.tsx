@@ -10,8 +10,6 @@ import { cn } from "@/lib/utils";
  * a partir de `sm` se centra como diálogo.
  */
 const Sheet = DialogPrimitive.Root;
-const SheetTrigger = DialogPrimitive.Trigger;
-const SheetClose = DialogPrimitive.Close;
 
 const SheetOverlay = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Overlay>,
@@ -99,8 +97,6 @@ SheetDescription.displayName = DialogPrimitive.Description.displayName;
 
 export {
   Sheet,
-  SheetTrigger,
-  SheetClose,
   SheetContent,
   SheetHeader,
   SheetTitle,

@@ -98,8 +98,8 @@ export function formatShortDate(iso: DateISO): string {
   return `${pad(day)} ${MONTHS_ES_SHORT[month - 1]} ${year}`;
 }
 
-/** "01 sep" — para listados densos del mismo año. */
-export function formatDayMonth(iso: DateISO): string {
+/** "01 sep" — lo usan `formatRelativeDay` y los listados densos. */
+function formatDayMonth(iso: DateISO): string {
   const { month, day } = parseISO(iso);
   return `${pad(day)} ${MONTHS_ES_SHORT[month - 1]}`;
 }

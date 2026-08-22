@@ -1,5 +1,6 @@
 import "server-only";
 
+import { cache } from "react";
 import { createClient } from "@/infrastructure/supabase/server";
 import { addMonths, todayISO } from "@/lib/dates";
 import type {
@@ -30,7 +31,7 @@ function pendingStatement(account: RevolvingSummaryRow): number {
 }
 
 /** Estado visible de una cuota. Depende de hoy, por eso no se persiste. */
-export function installmentState(
+function installmentState(
   row: Pick<ScheduleRowDB, "status" | "due_date" | "installment_number">,
   nextInstallment: number | null,
   today = todayISO(),
@@ -118,7 +119,7 @@ export function buildOverview(
  * Próximos pagos: la siguiente cuota de cada crédito activo, ordenada por
  * urgencia. Lo vencido va primero — es lo que hay que resolver hoy.
  */
-export function buildUpcomingPayments(
+function buildUpcomingPayments(
   summaries: CreditSummary[],
   limit = 4,
   today = todayISO(),
@@ -151,7 +152,7 @@ export function buildUpcomingPayments(
 }
 
 /** Extractos de tarjeta pendientes de pagar. */
-export function buildUpcomingStatements(
+function buildUpcomingStatements(
   accounts: RevolvingSummaryRow[],
   today = todayISO(),
 ): Array<{ kind: "revolving" } & UpcomingStatement> {
@@ -203,16 +204,22 @@ export function buildUpcoming(
     .slice(0, limit);
 }
 
-export interface CreditDetail {
+interface CreditDetail {
   credit: CreditRow;
   summary: CreditSummary;
   installments: Installment[];
 }
 
-/** Detalle completo de un crédito: cabecera, resumen y plan de pagos. */
-export async function getCreditDetail(
+/**
+ * Detalle completo de un crédito: cabecera, resumen y plan de pagos.
+ *
+ * `cache()` porque la pantalla lo pide DOS veces por carga — una en
+ * `generateMetadata` para el título y otra al renderizar. Sin esto eran seis
+ * consultas donde bastan tres.
+ */
+export const getCreditDetail = cache(async (
   creditId: string,
-): Promise<CreditDetail | null> {
+): Promise<CreditDetail | null> => {
   const supabase = await createClient();
 
   const [creditRes, summaryRes, scheduleRes] = await Promise.all([
@@ -247,7 +254,7 @@ export async function getCreditDetail(
       state: installmentState(row, next, today),
     })),
   };
-}
+});
 
 export interface ActivityEntry extends ActivityRow {
   creditName: string | null;

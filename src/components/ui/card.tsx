@@ -23,18 +23,6 @@ const Card = React.forwardRef<
 });
 Card.displayName = "Card";
 
-const CardTitle = React.forwardRef<
-  HTMLHeadingElement,
-  React.HTMLAttributes<HTMLHeadingElement>
->(({ className, ...props }, ref) => (
-  <h2
-    ref={ref}
-    className={cn("text-base font-semibold tracking-tight", className)}
-    {...props}
-  />
-));
-CardTitle.displayName = "CardTitle";
-
 /** Rotulo en versalitas de las secciones: DEUDA TOTAL, PROXIMO PAGO... */
 const CardEyebrow = React.forwardRef<
   HTMLParagraphElement,
@@ -51,4 +39,4 @@ const CardEyebrow = React.forwardRef<
 ));
 CardEyebrow.displayName = "CardEyebrow";
 
-export { Card, CardTitle, CardEyebrow };
+export { Card, CardEyebrow };

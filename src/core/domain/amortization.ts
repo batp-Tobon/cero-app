@@ -29,7 +29,7 @@ export interface ScheduleRow {
   closingBalance: number;
 }
 
-export interface BuildScheduleInput {
+interface BuildScheduleInput {
   /** Capital a amortizar. */
   principal: number;
   /** Tasa mensual en decimal (1,89 % m.v. -> 0.0189). */
@@ -49,7 +49,7 @@ export interface BuildScheduleInput {
   dueDates?: DateISO[];
 }
 
-export interface ScheduleTotals {
+interface ScheduleTotals {
   installments: number;
   totalPaid: number;
   totalInterest: number;
@@ -208,7 +208,7 @@ export function summarize(rows: ScheduleRow[]): ScheduleTotals {
 // Recálculo tras un abono a capital
 // ---------------------------------------------------------------------------
 
-export interface RecalculateInput {
+interface RecalculateInput {
   /** Saldo vivo YA descontado el abono extraordinario. */
   balance: number;
   monthlyRate: number;
@@ -290,7 +290,7 @@ export function recalculateRemaining(input: RecalculateInput): ScheduleRow[] {
 // Reparto de un pago entre interés y capital
 // ---------------------------------------------------------------------------
 
-export interface AllocationInput {
+interface AllocationInput {
   /** Efectivo aplicado a la cuota. */
   amount: number;
   /** Interés que trae programada la cuota. */
@@ -299,7 +299,7 @@ export interface AllocationInput {
   openingBalance: number;
 }
 
-export interface Allocation {
+interface Allocation {
   interestPaid: number;
   principalPaid: number;
   /** Sobrante que no cabe como capital de esta cuota. */

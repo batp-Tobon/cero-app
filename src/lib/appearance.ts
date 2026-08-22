@@ -33,7 +33,7 @@ export type AccentColor =
   | "teal"
   | "indigo";
 
-export interface AccentClasses {
+interface AccentClasses {
   /** Círculo del icono. */
   chip: string;
   /** Color del icono y de los acentos de texto. */

@@ -3,11 +3,6 @@ import "server-only";
 import { createClient, getCurrentProfile } from "@/infrastructure/supabase/server";
 import type { CreditSummaryRow, ProfileRow, UserRoleDB } from "@/types/database";
 
-/** ¿El usuario de esta petición es administrador? */
-export async function isCurrentUserAdmin(): Promise<boolean> {
-  const profile = await getCurrentProfile();
-  return profile?.role === "admin";
-}
 
 export interface AdminUser {
   id: string;
@@ -20,7 +15,7 @@ export interface AdminUser {
   totalPaid: number;
 }
 
-export interface AdminOverview {
+interface AdminOverview {
   users: AdminUser[];
   credits: Array<
     CreditSummaryRow & { ownerName: string | null; ownerEmail: string | null }

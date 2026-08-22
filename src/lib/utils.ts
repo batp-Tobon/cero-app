@@ -23,7 +23,7 @@ export function firstName(name?: string | null): string {
 }
 
 /** Acota un número a un rango. */
-export function clamp(n: number, min: number, max: number): number {
+function clamp(n: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, n));
 }
 

@@ -42,7 +42,7 @@ const creditSchema = z.object({
   notes: z.string().trim().max(500).optional().nullable(),
 });
 
-export type CreditInput = z.input<typeof creditSchema>;
+type CreditInput = z.input<typeof creditSchema>;
 
 /**
  * Crea el crédito y su plan de pagos en un solo flujo.

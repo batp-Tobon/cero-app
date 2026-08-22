@@ -82,9 +82,9 @@ const paymentSchema = z.object({
   notes: z.string().trim().max(300).optional().nullable(),
 });
 
-export type PaymentInput = z.input<typeof paymentSchema>;
+type PaymentInput = z.input<typeof paymentSchema>;
 
-export interface PaymentResultData {
+interface PaymentResultData {
   newBalance: number;
   creditSettled: boolean;
   installmentsLeft: number;
@@ -220,9 +220,9 @@ const extraSchema = z.object({
   notes: z.string().trim().max(300).optional().nullable(),
 });
 
-export type ExtraPrincipalInput = z.input<typeof extraSchema>;
+type ExtraPrincipalInput = z.input<typeof extraSchema>;
 
-export interface ExtraPrincipalResultData {
+interface ExtraPrincipalResultData {
   newBalance: number;
   creditSettled: boolean;
   installmentsLeft: number;
@@ -346,7 +346,7 @@ const editSchema = z.object({
   notes: z.string().trim().max(300).optional().nullable(),
 });
 
-export type EditPaymentInput = z.input<typeof editSchema>;
+type EditPaymentInput = z.input<typeof editSchema>;
 
 /**
  * Corrige un movimiento ya registrado.

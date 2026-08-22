@@ -12,11 +12,10 @@ import { todayISO } from "@/lib/dates";
 export const metadata: Metadata = { title: "Actividad" };
 
 export default async function ActivityPage() {
-  const profile = await getCurrentProfile();
-
+  let profile;
   let entries;
   try {
-    entries = await getActivity();
+    [profile, entries] = await Promise.all([getCurrentProfile(), getActivity()]);
   } catch (error) {
     return (
       <ErrorState detail={error instanceof Error ? error.message : undefined} />

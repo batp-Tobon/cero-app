@@ -18,7 +18,10 @@ export default async function ProfilePage() {
   const user = await getCurrentUser();
   if (!user) redirect("/login?motivo=sesion");
 
-  const stored = await getCurrentProfile();
+  const [stored, summaries] = await Promise.all([
+    getCurrentProfile(),
+    getCreditSummaries().catch(() => []),
+  ]);
 
   // Si el trigger de alta no llegó a correr, la pantalla sigue funcionando
   // con los datos de la sesión en vez de romperse.
@@ -33,11 +36,11 @@ export default async function ProfilePage() {
     notify_upcoming: true,
     notify_overdue: true,
     notify_payments: true,
-    created_at: user.created_at,
-    updated_at: user.created_at,
+    // Sólo se usa si el trigger de alta no llegó a crear el perfil.
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
   };
 
-  const summaries = await getCreditSummaries().catch(() => []);
   const active = summaries.filter((c) => c.status === "active");
   const totalDebt = active.reduce((s, c) => s + Number(c.balance), 0);
   const totalPaid = summaries.reduce((s, c) => s + Number(c.total_paid), 0);
