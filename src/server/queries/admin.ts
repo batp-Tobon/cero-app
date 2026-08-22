@@ -1,6 +1,6 @@
 import "server-only";
 
-import { createClient, getCurrentProfile } from "@/infrastructure/supabase/server";
+import { createClient } from "@/infrastructure/supabase/server";
 import type { CreditSummaryRow, ProfileRow, UserRoleDB } from "@/types/database";
 
 

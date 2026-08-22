@@ -4,11 +4,6 @@
  */
 
 import type {
-  AmortizationSystem,
-  ExtraPrincipalMode,
-} from "@/core/domain/amortization";
-import type {
-  ActivityRow,
   CreditRow,
   CreditSummaryRow,
   CreditTypeDB,
