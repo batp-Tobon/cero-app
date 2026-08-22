@@ -4,13 +4,13 @@ import {
   getCurrentProfile,
   getCurrentUser,
 } from "@/infrastructure/supabase/server";
-import { getCreditSummaries } from "@/server/queries/credits";
-import { ProfileSettings } from "@/components/profile/profile-settings";
-import { PageHeader } from "@/components/layout/page-header";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { formatMoney } from "@/lib/format";
-import { initials } from "@/lib/utils";
-import type { Profile } from "@/types/domain";
+import { getCreditSummaries } from "@/features/credits/queries";
+import { ProfileSettings } from "@/features/profile/components/profile-settings";
+import { PageHeader } from "@/shared/components/page-header";
+import { Avatar, AvatarFallback, AvatarImage } from "@/shared/ui/avatar";
+import { formatMoney } from "@/shared/lib/format";
+import { initials } from "@/shared/lib/utils";
+import type { Profile } from "@/shared/types/domain";
 
 export const metadata: Metadata = { title: "Perfil" };
 

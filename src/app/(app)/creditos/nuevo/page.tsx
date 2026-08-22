@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import { getCurrentProfile } from "@/infrastructure/supabase/server";
-import { NewCreditForm } from "@/components/credits/new-credit-form";
-import { PageHeader } from "@/components/layout/page-header";
-import { env } from "@/lib/env";
+import { NewCreditForm } from "@/features/credits/components/new-credit-form";
+import { PageHeader } from "@/shared/components/page-header";
+import { env } from "@/shared/lib/env";
 
 export const metadata: Metadata = { title: "Nuevo crédito" };
 

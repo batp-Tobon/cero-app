@@ -1,5 +1,5 @@
 import { WifiOff } from "lucide-react";
-import { CeroMark } from "@/components/common/cero-mark";
+import { CeroMark } from "@/shared/components/cero-mark";
 
 export const metadata = { title: "Sin conexión" };
 

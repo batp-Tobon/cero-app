@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { PageHeader } from "@/components/layout/page-header";
+import { PageHeader } from "@/shared/components/page-header";
 
 export const metadata: Metadata = { title: "Ayuda" };
 

@@ -1,13 +1,13 @@
 import type { Metadata } from "next";
 import { Activity as ActivityIcon } from "lucide-react";
 import { getCurrentProfile } from "@/infrastructure/supabase/server";
-import { getActivity } from "@/server/queries/credits";
-import { ActivityTimeline } from "@/components/activity/activity-timeline";
-import { PageHeader } from "@/components/layout/page-header";
-import { EmptyState, ErrorState } from "@/components/common/states";
-import { formatMoney } from "@/lib/format";
-import { firstName } from "@/lib/utils";
-import { todayISO } from "@/lib/dates";
+import { getActivity } from "@/features/credits/queries";
+import { ActivityTimeline } from "@/features/activity/components/activity-timeline";
+import { PageHeader } from "@/shared/components/page-header";
+import { EmptyState, ErrorState } from "@/shared/components/states";
+import { formatMoney } from "@/shared/lib/format";
+import { firstName } from "@/shared/lib/utils";
+import { todayISO } from "@/shared/lib/dates";
 
 export const metadata: Metadata = { title: "Actividad" };
 

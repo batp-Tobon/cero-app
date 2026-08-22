@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 import type { Metadata } from "next";
-import { LoginForm } from "@/components/auth/login-form";
-import { Skeleton } from "@/components/ui/skeleton";
+import { LoginForm } from "@/features/auth/components/login-form";
+import { Skeleton } from "@/shared/ui/skeleton";
 
 export const metadata: Metadata = { title: "Iniciar sesión" };
 

@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/infrastructure/supabase/server";
-import { BottomNav } from "@/components/layout/bottom-nav";
+import { BottomNav } from "@/shared/components/bottom-nav";
 
 export default async function AppLayout({
   children,

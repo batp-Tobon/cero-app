@@ -1,11 +1,11 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getCurrentProfile } from "@/infrastructure/supabase/server";
-import { getAdminOverview } from "@/server/queries/admin";
-import { AdminCredits, AdminUsers } from "@/components/admin/admin-panels";
-import { PageHeader } from "@/components/layout/page-header";
-import { ErrorState } from "@/components/common/states";
-import { formatMoney } from "@/lib/format";
+import { getAdminOverview } from "@/features/admin/queries";
+import { AdminCredits, AdminUsers } from "@/features/admin/components/admin-panels";
+import { PageHeader } from "@/shared/components/page-header";
+import { ErrorState } from "@/shared/components/states";
+import { formatMoney } from "@/shared/lib/format";
 
 export const metadata: Metadata = { title: "Administración" };
 

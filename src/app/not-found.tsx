@@ -1,6 +1,6 @@
 import Link from "next/link";
-import { Button } from "@/components/ui/button";
-import { CeroMark } from "@/components/common/cero-mark";
+import { Button } from "@/shared/ui/button";
+import { CeroMark } from "@/shared/components/cero-mark";
 
 export default function NotFound() {
   return (

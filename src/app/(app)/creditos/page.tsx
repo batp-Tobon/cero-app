@@ -1,15 +1,15 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { CreditCard, Plus, Wallet } from "lucide-react";
-import { getCreditSummaries } from "@/server/queries/credits";
-import { getRevolvingSummaries } from "@/server/queries/revolving";
-import { getAllCreditMembers } from "@/server/actions/members";
+import { getCreditSummaries } from "@/features/credits/queries";
+import { getRevolvingSummaries } from "@/features/revolving/queries";
+import { getAllCreditMembers } from "@/features/credits/members";
 import { getCurrentUser } from "@/infrastructure/supabase/server";
-import { CreditCard as CreditItem } from "@/components/credits/credit-card";
-import { RevolvingCard } from "@/components/revolving/revolving-card";
-import { PageHeader } from "@/components/layout/page-header";
-import { EmptyState, ErrorState } from "@/components/common/states";
-import { formatMoney } from "@/lib/format";
+import { CreditCard as CreditItem } from "@/features/credits/components/credit-card";
+import { RevolvingCard } from "@/features/revolving/components/revolving-card";
+import { PageHeader } from "@/shared/components/page-header";
+import { EmptyState, ErrorState } from "@/shared/components/states";
+import { formatMoney } from "@/shared/lib/format";
 
 export const metadata: Metadata = { title: "Créditos" };
 

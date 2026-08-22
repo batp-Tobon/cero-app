@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient, getCurrentUser } from "@/infrastructure/supabase/server";
-import { todayISO } from "@/lib/dates";
+import { todayISO } from "@/shared/lib/dates";
 
 export const dynamic = "force-dynamic";
 

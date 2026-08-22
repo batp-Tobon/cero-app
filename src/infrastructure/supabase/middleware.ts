@@ -1,7 +1,7 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
-import type { Database } from "@/types/database";
-import { env, isSupabaseConfigured } from "@/lib/env";
+import type { Database } from "@/shared/types/database";
+import { env, isSupabaseConfigured } from "@/shared/lib/env";
 
 type CookieToSet = { name: string; value: string; options: CookieOptions };
 

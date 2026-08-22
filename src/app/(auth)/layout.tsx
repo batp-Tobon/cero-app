@@ -1,4 +1,4 @@
-import { CeroWordmark } from "@/components/common/cero-mark";
+import { CeroWordmark } from "@/shared/components/cero-mark";
 
 export default function AuthLayout({
   children,

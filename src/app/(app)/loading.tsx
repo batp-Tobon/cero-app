@@ -1,4 +1,4 @@
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@/shared/ui/skeleton";
 
 /**
  * Esqueleto compartido de las pantallas privadas. Reproduce la silueta real

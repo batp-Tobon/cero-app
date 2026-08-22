@@ -101,25 +101,23 @@ cada crédito para derivar el cronograma desde los movimientos cargados.
 
 ```
 src/
-  app/
-    (auth)/            login · registro · recuperar · nueva contraseña
-    (app)/             inicio · créditos · tarjetas · actividad · perfil · admin
-    api/export/        descarga CSV
-    auth/callback/     canje del código de Supabase Auth
-  components/
+  app/                 rutas de Next.js — sólo componen, no deciden
+  features/            un módulo por parte del producto (ver features/README.md)
+    auth/ credits/ payments/ revolving/
+    dashboard/ activity/ profile/ admin/
+  core/                motor de amortización y dinero — puro, sin dependencias
+  shared/
     ui/                primitivas (botón, input, sheet, select…)
-    common/            estados, importes, selectores
-    layout/            navegación inferior, cabeceras
-    dashboard/ credits/ payments/ activity/ profile/
-  core/domain/         motor de amortización (puro y testeado)
-  server/
-    queries/           lecturas para Server Components
-    actions/           Server Actions (escrituras)
-    services/          persistencia del plan de pagos
-  infrastructure/supabase/  clientes de navegador, servidor y middleware
-  lib/                 formato, fechas, constantes, entorno
-  types/               tipos de BD y de dominio
+    components/        piezas sin dueño (cabecera, navegación, estados)
+    lib/               formato, fechas, apariencia, constantes, entorno
+    types/             tipos de la base de datos y del dominio
+  infrastructure/      clientes de Supabase y refresco de sesión
 ```
+
+Cada módulo de `features/` guarda junto lo suyo: pantallas, acciones de
+escritura y consultas. Para cambiar algo de créditos se abre `features/credits/`
+y está todo ahí — no hay que recorrer tres carpetas técnicas para seguir un
+cambio. En `src/features/README.md` está la regla completa.
 
 ### Reglas que sostienen el diseño
 

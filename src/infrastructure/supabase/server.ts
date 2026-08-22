@@ -1,8 +1,8 @@
 import { cache } from "react";
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { cookies } from "next/headers";
-import type { Database, ProfileRow } from "@/types/database";
-import { env, isSupabaseConfigured } from "@/lib/env";
+import type { Database, ProfileRow } from "@/shared/types/database";
+import { env, isSupabaseConfigured } from "@/shared/lib/env";
 
 type CookieToSet = { name: string; value: string; options: CookieOptions };
 

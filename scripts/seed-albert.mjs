@@ -126,7 +126,7 @@ const vite = await createServer({
   resolve: { alias: { "@": fileURLToPath(new URL("../src", import.meta.url)) } },
 });
 const { replaySchedule } = await vite.ssrLoadModule(
-  "/src/core/domain/amortization.ts",
+  "/src/core/amortization.ts",
 );
 
 const db = createClient(url, serviceKey, {

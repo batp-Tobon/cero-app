@@ -1,25 +1,25 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { CheckCircle2 } from "lucide-react";
-import { getCreditDetail, getCreditPayments } from "@/server/queries/credits";
-import { getCreditMembers } from "@/server/actions/members";
+import { getCreditDetail, getCreditPayments } from "@/features/credits/queries";
+import { getCreditMembers } from "@/features/credits/members";
 import { getCurrentUser } from "@/infrastructure/supabase/server";
-import { PageHeader } from "@/components/layout/page-header";
-import { CardEyebrow } from "@/components/ui/card";
-import { Progress } from "@/components/ui/progress";
-import { ScheduleList } from "@/components/credits/schedule-list";
-import { CreditMenu } from "@/components/credits/credit-menu";
-import { ShareButton } from "@/components/credits/share-button";
-import { PaymentHistory } from "@/components/payments/payment-history";
+import { PageHeader } from "@/shared/components/page-header";
+import { CardEyebrow } from "@/shared/ui/card";
+import { Progress } from "@/shared/ui/progress";
+import { ScheduleList } from "@/features/credits/components/schedule-list";
+import { CreditMenu } from "@/features/credits/components/credit-menu";
+import { ShareButton } from "@/features/credits/components/share-button";
+import { PaymentHistory } from "@/features/payments/components/payment-history";
 import {
   ExtraPrincipalButton,
   PayButton,
-} from "@/components/payments/payment-actions";
-import { amortizationLabel, creditTypeLabel } from "@/lib/constants";
-import { formatMoney, formatRate } from "@/lib/format";
-import { formatLongDate } from "@/lib/dates";
-import { percent } from "@/lib/utils";
-import type { PaymentTarget } from "@/types/domain";
+} from "@/features/payments/components/payment-actions";
+import { amortizationLabel, creditTypeLabel } from "@/shared/lib/constants";
+import { formatMoney, formatRate } from "@/shared/lib/format";
+import { formatLongDate } from "@/shared/lib/dates";
+import { percent } from "@/shared/lib/utils";
+import type { PaymentTarget } from "@/shared/types/domain";
 
 type Params = { params: Promise<{ id: string }> };
 

@@ -6,16 +6,16 @@ import {
   buildUpcoming,
   buildDebtSlices,
   getCreditSummaries,
-} from "@/server/queries/credits";
-import { getRevolvingSummaries } from "@/server/queries/revolving";
-import { DebtSummary } from "@/components/dashboard/debt-summary";
-import { UpcomingPayments } from "@/components/dashboard/upcoming-payments";
-import { MonthSummary } from "@/components/dashboard/month-summary";
-import { CreditMix } from "@/components/dashboard/credit-mix";
-import { UserAvatar } from "@/components/layout/user-avatar";
-import { EmptyState, ErrorState } from "@/components/common/states";
-import { greeting } from "@/lib/dates";
-import { firstName } from "@/lib/utils";
+} from "@/features/credits/queries";
+import { getRevolvingSummaries } from "@/features/revolving/queries";
+import { DebtSummary } from "@/features/dashboard/components/debt-summary";
+import { UpcomingPayments } from "@/features/dashboard/components/upcoming-payments";
+import { MonthSummary } from "@/features/dashboard/components/month-summary";
+import { CreditMix } from "@/features/dashboard/components/credit-mix";
+import { UserAvatar } from "@/shared/components/user-avatar";
+import { EmptyState, ErrorState } from "@/shared/components/states";
+import { greeting } from "@/shared/lib/dates";
+import { firstName } from "@/shared/lib/utils";
 
 export const metadata: Metadata = { title: "Inicio" };
 

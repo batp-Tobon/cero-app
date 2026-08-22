@@ -50,11 +50,11 @@ const vite = await createServer({
   server: { middlewareMode: true },
   appType: "custom",
   logLevel: "warn",
-  // El motor importa "@/lib/dates": hay que resolver el alias tambien aqui.
+  // El motor importa "@/shared/lib/dates": hay que resolver el alias tambien aqui.
   resolve: { alias: { "@": fileURLToPath(new URL("../src", import.meta.url)) } },
 });
 const { buildSchedule } = await vite.ssrLoadModule(
-  "/src/core/domain/amortization.ts",
+  "/src/core/amortization.ts",
 );
 
 const db = createClient(url, serviceKey, {

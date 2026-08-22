@@ -1,21 +1,21 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { CreditCard } from "lucide-react";
-import { getRevolvingDetail } from "@/server/queries/revolving";
-import { PageHeader } from "@/components/layout/page-header";
-import { RevolvingMenu } from "@/components/revolving/revolving-menu";
-import { MovementList } from "@/components/revolving/movement-list";
-import { CardEyebrow } from "@/components/ui/card";
-import { Progress } from "@/components/ui/progress";
+import { getRevolvingDetail } from "@/features/revolving/queries";
+import { PageHeader } from "@/shared/components/page-header";
+import { RevolvingMenu } from "@/features/revolving/components/revolving-menu";
+import { MovementList } from "@/features/revolving/components/movement-list";
+import { CardEyebrow } from "@/shared/ui/card";
+import { Progress } from "@/shared/ui/progress";
 import {
   MovementButton,
   StatementButton,
-} from "@/components/revolving/revolving-actions";
-import { formatMoney, formatPercent, formatRate } from "@/lib/format";
-import { formatLongDate, formatShortDate } from "@/lib/dates";
-import { percent } from "@/lib/utils";
-import { accent, productIcon } from "@/lib/appearance";
-import { ProductBadge } from "@/components/common/product-badge";
+} from "@/features/revolving/components/revolving-actions";
+import { formatMoney, formatPercent, formatRate } from "@/shared/lib/format";
+import { formatLongDate, formatShortDate } from "@/shared/lib/dates";
+import { percent } from "@/shared/lib/utils";
+import { accent, productIcon } from "@/shared/lib/appearance";
+import { ProductBadge } from "@/shared/components/product-badge";
 
 type Params = { params: Promise<{ id: string }> };
 

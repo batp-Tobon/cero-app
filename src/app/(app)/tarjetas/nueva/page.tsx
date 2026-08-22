@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import { getCurrentProfile } from "@/infrastructure/supabase/server";
-import { NewRevolvingForm } from "@/components/revolving/new-revolving-form";
-import { PageHeader } from "@/components/layout/page-header";
-import { env } from "@/lib/env";
+import { NewRevolvingForm } from "@/features/revolving/components/new-revolving-form";
+import { PageHeader } from "@/shared/components/page-header";
+import { env } from "@/shared/lib/env";
 
 export const metadata: Metadata = { title: "Nueva tarjeta" };
 
