@@ -41,11 +41,20 @@ const LOTE = {
   monthlyRate: 0.0155067,
   /** Plazo que reproduce la cuota de $3.158.229. El pactado (48) no cuadra. */
   termMonths: 62,
-  /** Desembolso 19/06/2026 -> primera cuota el 2 de julio. */
-  firstPaymentDate: "2026-07-02",
-  /** Abono a capital del extracto (movimiento del 11 de julio). */
-  extraPrincipal: { amount: 15_747_921, date: "2026-07-11" },
-  installmentsPaid: 2,
+  /**
+   * Desembolso 19/06/2026. La primera cuota es el 2 de AGOSTO: el pago del 27
+   * de julio la cubre por adelantado, y eso deja la siguiente el 02/09/2026,
+   * que es justo la fecha limite que muestra el banco.
+   */
+  firstPaymentDate: "2026-08-02",
+  /**
+   * Historial real, tal cual ocurrió. No se inventan cuotas: si sólo hubo un
+   * pago, sólo hay un pago.
+   */
+  movements: [
+    { kind: "extra", amount: 15_747_921, date: "2026-07-11" },
+    { kind: "payment", amount: 5_200_000, date: "2026-07-27" },
+  ],
 };
 
 const VEHICULO = {
@@ -53,7 +62,8 @@ const VEHICULO = {
   monthlyRate: 0.0189, // 1,89 % N.M.V. (= 25,1926 % E.A.)
   termMonths: 72,
   firstPaymentDate: "2026-09-01",
-  installmentsPaid: 0,
+  // Todavía no vence la primera cuota.
+  movements: [],
 };
 
 const TARJETA = {
@@ -115,7 +125,7 @@ const vite = await createServer({
   logLevel: "warn",
   resolve: { alias: { "@": fileURLToPath(new URL("../src", import.meta.url)) } },
 });
-const { buildSchedule, replaySchedule } = await vite.ssrLoadModule(
+const { replaySchedule } = await vite.ssrLoadModule(
   "/src/core/domain/amortization.ts",
 );
 
@@ -195,38 +205,17 @@ async function createCredit(spec) {
 
   if (error) throw new Error(`${spec.name}: ${error.message}`);
 
-  // Historial: las cuotas ya pagadas, con su importe programado.
-  const plan = buildSchedule({
-    principal: spec.principal,
-    monthlyRate: spec.monthlyRate,
-    termMonths: spec.termMonths,
-    system: "french",
-    firstPaymentDate: spec.firstPaymentDate,
-  });
-
-  const events = plan.slice(0, spec.installmentsPaid).map((row, i) => ({
+  // Historial: exactamente los movimientos que ocurrieron, en su fecha.
+  const events = (spec.movements ?? []).map((m) => ({
     credit_id: credit.id,
     user_id: owner.id,
-    installment_number: i + 1,
-    payment_date: row.dueDate,
-    amount_paid: row.payment,
+    installment_number: null,
+    payment_date: m.date,
+    amount_paid: m.kind === "payment" ? m.amount : 0,
     principal_paid: 0,
     interest_paid: 0,
-    extra_principal: 0,
+    extra_principal: m.kind === "extra" ? m.amount : 0,
   }));
-
-  if (spec.extraPrincipal) {
-    events.push({
-      credit_id: credit.id,
-      user_id: owner.id,
-      installment_number: null,
-      payment_date: spec.extraPrincipal.date,
-      amount_paid: 0,
-      principal_paid: 0,
-      interest_paid: 0,
-      extra_principal: spec.extraPrincipal.amount,
-    });
-  }
 
   if (events.length > 0) {
     const { error: paymentsError } = await db.from("payments").insert(events);

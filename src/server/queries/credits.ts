@@ -7,15 +7,27 @@ import type {
   DebtOverview,
   Installment,
   InstallmentState,
+  UpcomingItem,
   UpcomingPayment,
+  UpcomingStatement,
 } from "@/types/domain";
 import type {
   ActivityRow,
   CreditRow,
   PaymentRow,
+  RevolvingSummaryRow,
   ScheduleRowDB,
 } from "@/types/database";
 import { env } from "@/lib/env";
+
+/** Lo que queda por pagar del extracto vigente de una tarjeta. */
+function pendingStatement(account: RevolvingSummaryRow): number {
+  return Math.max(
+    0,
+    Number(account.statement_total_due ?? 0) -
+      Number(account.statement_paid_amount ?? 0),
+  );
+}
 
 /** Estado visible de una cuota. Depende de hoy, por eso no se persiste. */
 export function installmentState(
@@ -48,7 +60,7 @@ export async function getCreditSummaries(): Promise<CreditSummary[]> {
  */
 export function buildOverview(
   summaries: CreditSummary[],
-  revolving: Array<{ status: string; balance: number }> = [],
+  revolving: RevolvingSummaryRow[] = [],
 ): DebtOverview {
   const active = summaries.filter((c) => c.status === "active");
 
@@ -64,10 +76,10 @@ export function buildOverview(
     (s, c) => s + Number(c.total_principal_paid),
     0,
   );
-  const monthlyCommitment = active.reduce(
-    (s, c) => s + Number(c.next_payment_amount ?? 0),
-    0,
-  );
+  const activeCards = revolving.filter((r) => r.status === "active");
+  const monthlyCommitment =
+    active.reduce((s, c) => s + Number(c.next_payment_amount ?? 0), 0) +
+    activeCards.reduce((s, r) => s + pendingStatement(r), 0);
   const overdueCount = active.reduce((s, c) => s + Number(c.overdue_count), 0);
 
   // Cuándo se paga la última cuota del portafolio. El plan es mensual, así que
@@ -92,8 +104,9 @@ export function buildOverview(
       ? (totalPrincipalPaid / totalPrincipal) * 100
       : 0,
     monthlyCommitment,
-    installmentsDue: active.filter((c) => c.next_installment_number != null)
-      .length,
+    installmentsDue:
+      active.filter((c) => c.next_installment_number != null).length +
+      activeCards.filter((r) => pendingStatement(r) > 0).length,
     freeDate,
     overdueCount,
     activeCredits: active.length,
@@ -131,6 +144,57 @@ export function buildUpcomingPayments(
       openingBalance: Number(c.balance),
       state: (c.next_due_date! < today ? "overdue" : "next") as InstallmentState,
     }))
+    .sort((a, b) => a.dueDate.localeCompare(b.dueDate))
+    .slice(0, limit);
+}
+
+/** Extractos de tarjeta pendientes de pagar. */
+export function buildUpcomingStatements(
+  accounts: RevolvingSummaryRow[],
+  today = todayISO(),
+): Array<{ kind: "revolving" } & UpcomingStatement> {
+  return accounts
+    .filter(
+      (a) =>
+        a.status === "active" &&
+        a.statement_due_date != null &&
+        pendingStatement(a) > 0,
+    )
+    .map((a) => ({
+      kind: "revolving" as const,
+      accountId: a.id,
+      accountName: a.name,
+      currency: a.currency,
+      dueDate: a.statement_due_date!,
+      amount: pendingStatement(a),
+      minimum: Number(a.statement_minimum_due ?? 0),
+      balance: Number(a.balance),
+      available: Number(a.available),
+      state: (a.statement_due_date! < today
+        ? "overdue"
+        : "next") as InstallmentState,
+    }));
+}
+
+/**
+ * Todo lo que vence pronto, créditos y tarjetas juntos y ordenados por fecha.
+ * Lo vencido primero: es lo que hay que resolver hoy.
+ */
+export function buildUpcoming(
+  summaries: CreditSummary[],
+  accounts: RevolvingSummaryRow[] = [],
+  limit = 5,
+  today = todayISO(),
+): UpcomingItem[] {
+  const credits: UpcomingItem[] = buildUpcomingPayments(summaries, 99, today).map(
+    (c) => ({ kind: "credit" as const, amountDue: c.paymentAmount, ...c }),
+  );
+  const statements: UpcomingItem[] = buildUpcomingStatements(
+    accounts,
+    today,
+  ).map((s) => ({ ...s, amountDue: s.amount }));
+
+  return [...credits, ...statements]
     .sort((a, b) => a.dueDate.localeCompare(b.dueDate))
     .slice(0, limit);
 }

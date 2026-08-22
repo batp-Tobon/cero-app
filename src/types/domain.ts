@@ -51,11 +51,33 @@ export interface PaymentTarget {
   openingBalance: number;
 }
 
-/** Cuota que aparece en "Próximos pagos" del inicio. */
+/** Cuota de un crédito en "Próximos pagos". */
 export interface UpcomingPayment extends PaymentTarget {
   creditType: CreditType;
   state: InstallmentState;
 }
+
+/** Pago de tarjeta en "Próximos pagos": no hay cuota, hay corte y mínimo. */
+export interface UpcomingStatement {
+  accountId: string;
+  accountName: string;
+  currency: string;
+  dueDate: string;
+  amount: number;
+  minimum: number;
+  balance: number;
+  available: number;
+  state: InstallmentState;
+}
+
+/**
+ * Lo que hay que pagar pronto, venga de donde venga. El inicio no distingue
+ * entre una cuota y un extracto: distingue entre lo que vence antes y después.
+ */
+export type UpcomingItem = { amountDue: number } & (
+  | ({ kind: "credit" } & UpcomingPayment)
+  | ({ kind: "revolving" } & UpcomingStatement)
+);
 
 /** Cabecera del dashboard: las cinco preguntas que la app debe responder. */
 export interface DebtOverview {

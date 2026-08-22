@@ -11,7 +11,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { Button } from "@/components/ui/button";
+import { Button, type ButtonProps } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { AmountField } from "@/components/common/amount-field";
@@ -40,6 +40,7 @@ export function MovementButton({
   defaultKind = "payment",
   label = "Registrar movimiento",
   variant = "default",
+  size,
   className,
 }: {
   accountId: string;
@@ -49,7 +50,8 @@ export function MovementButton({
   available: number;
   defaultKind?: MovementKind;
   label?: string;
-  variant?: "default" | "outline" | "secondary";
+  variant?: ButtonProps["variant"];
+  size?: ButtonProps["size"];
   className?: string;
 }) {
   const router = useRouter();
@@ -103,10 +105,11 @@ export function MovementButton({
     <>
       <Button
         variant={variant}
+        size={size}
         className={className}
         onClick={() => setOpen(true)}
       >
-        <Plus className="h-4 w-4" aria-hidden />
+        {size !== "sm" && <Plus className="h-4 w-4" aria-hidden />}
         {label}
       </Button>
 

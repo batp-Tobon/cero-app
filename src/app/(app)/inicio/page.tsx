@@ -3,7 +3,7 @@ import { Wallet } from "lucide-react";
 import { getCurrentProfile } from "@/infrastructure/supabase/server";
 import {
   buildOverview,
-  buildUpcomingPayments,
+  buildUpcoming,
   getCreditSummaries,
 } from "@/server/queries/credits";
 import { getRevolvingSummaries } from "@/server/queries/revolving";
@@ -38,7 +38,7 @@ export default async function DashboardPage() {
   }
 
   const overview = buildOverview(summaries, cards);
-  const upcoming = buildUpcomingPayments(summaries);
+  const upcoming = buildUpcoming(summaries, cards);
   const name = firstName(profile?.full_name) || "de nuevo";
 
   return (
