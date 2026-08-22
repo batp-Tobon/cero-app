@@ -1,27 +1,20 @@
 import Link from "next/link";
+import { CreditCard } from "lucide-react";
 import { creditTypeIcon } from "@/lib/constants";
 import { accent, productIcon } from "@/lib/appearance";
-import { cn } from "@/lib/utils";
 import { formatMoney, formatPercent } from "@/lib/format";
-import { percent } from "@/lib/utils";
-import type { CreditSummary } from "@/types/domain";
+import { cn } from "@/lib/utils";
+import type { DebtSlice } from "@/types/domain";
 
 /**
- * Reparto de la deuda entre créditos: responde de un vistazo a "¿cuál pesa
- * más?", que es la pregunta previa a decidir dónde abonar.
+ * Reparto de la deuda: créditos y tarjetas juntos.
+ *
+ * La barra mide CUÁNTO SE HA PAGADO de cada deuda, no cuánto pesa dentro del
+ * total. Un crédito recién abierto se ve vacío aunque sea el más grande —
+ * medir el peso hacía que un crédito sin un solo pago apareciera a media barra.
  */
-export function CreditMix({
-  credits,
-  totalDebt,
-}: {
-  credits: CreditSummary[];
-  totalDebt: number;
-}) {
-  if (credits.length < 2) return null;
-
-  const sorted = [...credits].sort(
-    (a, b) => Number(b.balance) - Number(a.balance),
-  );
+export function CreditMix({ slices }: { slices: DebtSlice[] }) {
+  if (slices.length < 2) return null;
 
   return (
     <section aria-labelledby="mix" className="mt-9">
@@ -30,19 +23,21 @@ export function CreditMix({
       </h2>
 
       <ul className="mt-3 space-y-2.5">
-        {sorted.map((credit) => {
-          const Icon = productIcon(credit.icon, creditTypeIcon(credit.type));
-          const classes = accent(credit.color);
-          const share = percent(Number(credit.balance), totalDebt);
-          const progress = percent(
-            credit.paid_installments,
-            credit.total_installments,
+        {slices.map((slice) => {
+          const Icon = productIcon(
+            slice.icon,
+            slice.creditType ? creditTypeIcon(slice.creditType) : CreditCard,
           );
+          const classes = accent(slice.color);
+          const href =
+            slice.kind === "credit"
+              ? `/creditos/${slice.id}`
+              : `/tarjetas/${slice.id}`;
 
           return (
-            <li key={credit.id}>
+            <li key={`${slice.kind}-${slice.id}`}>
               <Link
-                href={`/creditos/${credit.id}`}
+                href={href}
                 className="block rounded-2xl bg-card p-4 transition-colors hover:bg-secondary"
               >
                 <div className="flex items-center gap-2.5">
@@ -51,10 +46,10 @@ export function CreditMix({
                     aria-hidden
                   />
                   <span className="min-w-0 flex-1 truncate text-sm font-medium">
-                    {credit.name}
+                    {slice.name}
                   </span>
                   <span className="tabular shrink-0 text-sm font-semibold">
-                    {formatMoney(credit.balance, credit.currency)}
+                    {formatMoney(slice.balance, slice.currency)}
                   </span>
                 </div>
 
@@ -65,17 +60,17 @@ export function CreditMix({
                   >
                     <div
                       className={cn("h-full rounded-full", classes.bar)}
-                      style={{ width: `${share}%` }}
+                      style={{ width: `${slice.paidPercent}%` }}
                     />
                   </div>
                   <span className="tabular shrink-0 text-[11px] text-muted-foreground">
-                    {formatPercent(share, 0)} del total
+                    {formatPercent(slice.paidPercent, 1)} pagado
                   </span>
                 </div>
 
                 <p className="tabular mt-1.5 text-[11px] text-muted-foreground">
-                  {credit.paid_installments}/{credit.total_installments} cuotas ·{" "}
-                  {formatPercent(progress, 0)} pagado
+                  {slice.detail} · {formatPercent(slice.sharePercent, 0)} de tu
+                  deuda
                 </p>
               </Link>
             </li>

@@ -1,15 +1,10 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
-import {
-  ArrowDownCircle,
-  ArrowUpCircle,
-  CreditCard,
-  Percent,
-  Receipt,
-} from "lucide-react";
+import { CreditCard } from "lucide-react";
 import { getRevolvingDetail } from "@/server/queries/revolving";
 import { PageHeader } from "@/components/layout/page-header";
 import { RevolvingMenu } from "@/components/revolving/revolving-menu";
+import { MovementList } from "@/components/revolving/movement-list";
 import { CardEyebrow } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import {
@@ -21,7 +16,6 @@ import { formatLongDate, formatShortDate } from "@/lib/dates";
 import { percent } from "@/lib/utils";
 import { accent, productIcon } from "@/lib/appearance";
 import { ProductBadge } from "@/components/common/product-badge";
-import type { MovementKindDB } from "@/types/database";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -31,15 +25,6 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
   return { title: detail?.account.name ?? "Tarjeta" };
 }
 
-const MOVEMENT_META: Record<
-  MovementKindDB,
-  { label: string; icon: typeof ArrowDownCircle; reducesDebt: boolean }
-> = {
-  payment: { label: "Pago", icon: ArrowDownCircle, reducesDebt: true },
-  charge: { label: "Compra", icon: ArrowUpCircle, reducesDebt: false },
-  interest: { label: "Intereses", icon: Percent, reducesDebt: false },
-  fee: { label: "Cuota de manejo", icon: Receipt, reducesDebt: false },
-};
 
 export default async function RevolvingDetailPage({ params }: Params) {
   const { id } = await params;
@@ -179,54 +164,7 @@ export default async function RevolvingDetailPage({ params }: Params) {
           Movimientos
         </h2>
 
-        {movements.length === 0 ? (
-          <p className="mt-3 rounded-2xl bg-card p-5 text-sm text-muted-foreground">
-            Todavía no hay movimientos registrados.
-          </p>
-        ) : (
-          <ul className="mt-3 space-y-2">
-            {movements.map((movement) => {
-              const meta = MOVEMENT_META[movement.kind];
-              const Icon = meta.icon;
-              return (
-                <li
-                  key={movement.id}
-                  className="flex items-center gap-3 rounded-2xl bg-card p-4"
-                >
-                  <span
-                    className={
-                      meta.reducesDebt
-                        ? "flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/15 text-primary"
-                        : "flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-secondary text-muted-foreground"
-                    }
-                    aria-hidden
-                  >
-                    <Icon className="h-4 w-4" />
-                  </span>
-
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium">{meta.label}</p>
-                    <p className="truncate text-xs text-muted-foreground">
-                      {formatShortDate(movement.movement_date)}
-                      {movement.description && ` · ${movement.description}`}
-                    </p>
-                  </div>
-
-                  <p
-                    className={
-                      meta.reducesDebt
-                        ? "tabular shrink-0 text-sm font-semibold text-primary"
-                        : "tabular shrink-0 text-sm font-semibold"
-                    }
-                  >
-                    {meta.reducesDebt ? "−" : "+"}
-                    {formatMoney(movement.amount, account.currency)}
-                  </p>
-                </li>
-              );
-            })}
-          </ul>
-        )}
+        <MovementList movements={movements} currency={account.currency} />
       </section>
 
       <section className="mt-8 rounded-3xl bg-card p-5">

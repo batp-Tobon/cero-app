@@ -94,6 +94,28 @@ export interface DebtOverview {
   currency: string;
 }
 
+/**
+ * Una deuda en el reparto del inicio, venga de un crédito o de una tarjeta.
+ * Se calcula en el servidor para que la pantalla no tenga que saber que un
+ * crédito mide su avance en cuotas y una tarjeta en dinero pagado.
+ */
+export interface DebtSlice {
+  kind: "credit" | "revolving";
+  id: string;
+  name: string;
+  creditType: CreditType | null;
+  color: string;
+  icon: string | null;
+  currency: string;
+  balance: number;
+  /** Cuánto se ha pagado de lo que se debía, en porcentaje. */
+  paidPercent: number;
+  /** Cuánto pesa esta deuda dentro del total. */
+  sharePercent: number;
+  /** "0/72 cuotas" o "cupo usado". */
+  detail: string;
+}
+
 export type ActionResult<T = undefined> =
   | { ok: true; data: T }
   | { ok: false; error: string };

@@ -4,6 +4,7 @@ import { getCurrentProfile } from "@/infrastructure/supabase/server";
 import {
   buildOverview,
   buildUpcoming,
+  buildDebtSlices,
   getCreditSummaries,
 } from "@/server/queries/credits";
 import { getRevolvingSummaries } from "@/server/queries/revolving";
@@ -75,10 +76,7 @@ export default async function DashboardPage() {
             currency={overview.currency}
           />
           <UpcomingPayments items={upcoming} />
-          <CreditMix
-            credits={summaries.filter((c) => c.status === "active")}
-            totalDebt={overview.totalDebt}
-          />
+          <CreditMix slices={buildDebtSlices(summaries, cards)} />
         </>
       )}
     </div>

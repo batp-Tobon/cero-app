@@ -11,6 +11,7 @@ import type {
   UpcomingItem,
   UpcomingPayment,
   UpcomingStatement,
+  DebtSlice,
 } from "@/types/domain";
 import type {
   ActivityRow,
@@ -202,6 +203,69 @@ export function buildUpcoming(
   return [...credits, ...statements]
     .sort((a, b) => a.dueDate.localeCompare(b.dueDate))
     .slice(0, limit);
+}
+
+/**
+ * Reparto de la deuda para el inicio.
+ *
+ * La barra mide AVANCE PAGADO, no cuánto pesa la deuda: un crédito recién
+ * abierto debe verse vacío aunque sea el más grande del portafolio.
+ *
+ * En una tarjeta no hay cuotas, así que el avance es cuánto se ha abonado
+ * frente a todo lo que se ha cargado.
+ */
+export function buildDebtSlices(
+  summaries: CreditSummary[],
+  accounts: RevolvingSummaryRow[] = [],
+): DebtSlice[] {
+  const credits = summaries
+    .filter((c) => c.status === "active")
+    .map<DebtSlice>((c) => ({
+      kind: "credit",
+      id: c.id,
+      name: c.name,
+      creditType: c.type,
+      color: c.color,
+      icon: c.icon,
+      currency: c.currency,
+      balance: Number(c.balance),
+      paidPercent: percentOf(
+        Number(c.total_principal_paid),
+        Number(c.principal_amount),
+      ),
+      sharePercent: 0,
+      detail: `${c.paid_installments}/${c.total_installments} cuotas`,
+    }));
+
+  const cards = accounts
+    .filter((a) => a.status === "active" && Number(a.balance) > 0)
+    .map<DebtSlice>((a) => ({
+      kind: "revolving",
+      id: a.id,
+      name: a.name,
+      creditType: null,
+      color: a.color,
+      icon: a.icon,
+      currency: a.currency,
+      balance: Number(a.balance),
+      paidPercent: percentOf(Number(a.total_paid), Number(a.total_charged)),
+      sharePercent: 0,
+      detail: `${percentOf(
+        Number(a.balance),
+        Number(a.credit_limit),
+      ).toFixed(0)}% del cupo usado`,
+    }));
+
+  const slices = [...credits, ...cards];
+  const total = slices.reduce((s, x) => s + x.balance, 0);
+  for (const slice of slices) slice.sharePercent = percentOf(slice.balance, total);
+
+  return slices.sort((a, b) => b.balance - a.balance);
+}
+
+function percentOf(part: number, total: number): number {
+  if (!total) return 0;
+  return Math.min(100, Math.max(0, (part / total) * 100));
 }
 
 interface CreditDetail {

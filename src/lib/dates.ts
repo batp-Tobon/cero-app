@@ -46,7 +46,7 @@ export function todayISO(): DateISO {
 }
 
 /** Descompone una fecha ISO sin pasar por `Date` (evita saltos de zona). */
-export function parseISO(iso: DateISO): {
+function parseISO(iso: DateISO): {
   year: number;
   month: number;
   day: number;

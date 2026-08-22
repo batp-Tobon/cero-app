@@ -332,6 +332,38 @@ export async function registerMovement(
 }
 
 
+/**
+ * Elimina un movimiento mal registrado.
+ *
+ * No hace falta recalcular nada: el saldo de una tarjeta es la suma de sus
+ * movimientos, así que quitar uno lo corrige solo.
+ */
+export async function deleteMovement(
+  movementId: string,
+): Promise<ActionResult> {
+  const user = await getCurrentUser();
+  if (!user) return { ok: false, error: "Tu sesión expiró." };
+
+  const supabase = await createClient();
+  const { data: movement } = await supabase
+    .from("revolving_movements")
+    .select("account_id")
+    .eq("id", movementId)
+    .maybeSingle();
+
+  if (!movement) return { ok: false, error: "No encontramos ese movimiento." };
+
+  const { error } = await supabase
+    .from("revolving_movements")
+    .delete()
+    .eq("id", movementId);
+
+  if (error) return { ok: false, error: error.message };
+
+  revalidateRevolving(movement.account_id);
+  return { ok: true, data: undefined };
+}
+
 // ---------------------------------------------------------------------------
 // Extracto
 // ---------------------------------------------------------------------------
