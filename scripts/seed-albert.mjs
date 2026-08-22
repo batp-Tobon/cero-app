@@ -123,6 +123,7 @@ const db = createClient(url, serviceKey, {
   auth: { autoRefreshToken: false, persistSession: false },
 });
 
+const NL = String.fromCharCode(10);
 const fmt = (n) =>
   new Intl.NumberFormat("es-CO", { maximumFractionDigits: 0 }).format(n);
 
@@ -376,15 +377,25 @@ if (cardError) {
 
 await vite.close();
 
+const EXTRACTO_LOTE = 107_865_126;
+const diff = lote.replay.balance - EXTRACTO_LOTE;
+
 console.log(
   [
     "",
-    "Listo. Ahora entra a CERO como administrador y pulsa",
-    '"Reconstruir plan de pagos" en cada crédito desde Perfil > Administración.',
-    "Ese paso deriva el cronograma desde los movimientos que acabas de cargar.",
+    "Los cronogramas ya están generados: no hace falta pulsar nada más.",
     "",
-    "Después compara el saldo del Lote con tu extracto ($107.865.126).",
-    "Si no coincide, ajusta monthlyRate / termMonths arriba y vuelve a ejecutar.",
-  ].join("\n"),
+    "Contraste del Lote con tu extracto de AV Villas:",
+    `  CERO   ${fmt(lote.replay.balance).padStart(13)}`,
+    `  banco  ${fmt(EXTRACTO_LOTE).padStart(13)}`,
+    `  dif    ${((diff > 0 ? "+" : "") + fmt(diff)).padStart(13)}  ` +
+      `(${((Math.abs(diff) / EXTRACTO_LOTE) * 100).toFixed(2)} %)`,
+    "",
+    "Esa diferencia son los seguros que el banco factura aparte (Fac. Vida, FNG)",
+    "y el prorrateo por días reales. Para afinarlo, confirma con AV Villas la",
+    "cuota, el plazo vigente y cuántas cuotas llevas pagadas; ajusta LOTE arriba",
+    "y vuelve a ejecutar con --reset.",
+  ].join(NL),
 );
+
 process.exit(0);
