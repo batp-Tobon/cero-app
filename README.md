@@ -93,6 +93,7 @@ cada crédito para derivar el cronograma desde los movimientos cargados.
 | `npm run lint`       | ESLint                                    |
 | `npm run icons`      | Regenera los iconos de la PWA             |
 | `npm run seed`       | Carga datos de ejemplo (dev)              |
+| `npm run verify:rls` | Comprueba los permisos contra la BD real  |
 
 ---
 
@@ -192,6 +193,21 @@ Cada push a `main` despliega a producción; cada PR genera un preview.
 ```bash
 npm test
 ```
+
+### Permisos
+
+Las políticas RLS no se pueden validar razonando sobre el papel. `verify:rls`
+crea dos usuarios temporales, monta un escenario de pareja (un crédito
+compartido y uno privado cada uno) y comprueba contra la base real que cada uno
+ve lo suyo, que el invitado puede pagar pero no borrar, que nadie registra pagos
+a nombre de otro, que las tarjetas no se comparten y que un usuario no se puede
+ascender a admin. Borra todo lo que crea, incluso si falla.
+
+```bash
+npm run verify:rls
+```
+
+Necesita `SUPABASE_SERVICE_ROLE_KEY` en `.env.local`.
 
 52 tests sobre el motor: la cuota francesa, los cuatro sistemas, el encadenado
 de saldos, el redondeo con centavos, el salto de meses cortos (31 ene → 28 feb),

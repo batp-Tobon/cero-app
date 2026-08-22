@@ -115,13 +115,16 @@ const vite = await createServer({
   logLevel: "warn",
   resolve: { alias: { "@": fileURLToPath(new URL("../src", import.meta.url)) } },
 });
-const { buildSchedule } = await vite.ssrLoadModule(
+const { buildSchedule, replaySchedule } = await vite.ssrLoadModule(
   "/src/core/domain/amortization.ts",
 );
 
 const db = createClient(url, serviceKey, {
   auth: { autoRefreshToken: false, persistSession: false },
 });
+
+const fmt = (n) =>
+  new Intl.NumberFormat("es-CO", { maximumFractionDigits: 0 }).format(n);
 
 async function findUser(email) {
   const { data, error } = await db.auth.admin.listUsers({ perPage: 1000 });
@@ -229,6 +232,71 @@ async function createCredit(spec) {
     if (paymentsError) throw new Error(`${spec.name}: ${paymentsError.message}`);
   }
 
+  // Cronograma: se deriva aquí con el MISMO motor que usa el servidor, para no
+  // dejar el crédito a medias esperando un botón. Es exactamente lo que hace
+  // `rebuildCreditSchedule`.
+  const replay = replaySchedule({
+    principal: spec.principal,
+    monthlyRate: spec.monthlyRate,
+    termMonths: spec.termMonths,
+    system: "french",
+    firstPaymentDate: spec.firstPaymentDate,
+    mode: "reduce_term",
+    events: events.map((e) => ({
+      id: `${e.payment_date}-${e.amount_paid}-${e.extra_principal}`,
+      date: e.payment_date,
+      settlesInstallment: e.amount_paid > 0,
+      amountPaid: e.amount_paid,
+      extraPrincipal: e.extra_principal,
+    })),
+  });
+
+  const money = (n) => Math.round(n * 100) / 100;
+
+  const { error: scheduleError } = await db.from("credit_schedule").insert(
+    replay.rows.map((row) => ({
+      credit_id: credit.id,
+      installment_number: row.installment,
+      due_date: row.dueDate,
+      opening_balance: money(row.openingBalance),
+      payment_amount: money(row.payment),
+      interest_amount: money(row.interest),
+      principal_amount: money(row.principal),
+      closing_balance: money(row.closingBalance),
+      extra_principal_before: money(row.extraPrincipalBefore),
+      paid_amount: money(row.paidAmount),
+      status: row.paid ? "paid" : "pending",
+    })),
+  );
+  if (scheduleError) throw new Error(`${spec.name}: ${scheduleError.message}`);
+
+  // Imputación real de cada pago (interés / capital), como en el servidor.
+  const paymentRows = await db
+    .from("payments")
+    .select("id, payment_date, amount_paid, extra_principal")
+    .eq("credit_id", credit.id)
+    .order("payment_date", { ascending: true })
+    .order("created_at", { ascending: true });
+
+  for (const [i, allocation] of replay.allocations.entries()) {
+    const row = paymentRows.data?.[i];
+    if (!row) continue;
+    await db
+      .from("payments")
+      .update({
+        installment_number: allocation.installment,
+        principal_paid: money(allocation.principalPaid),
+        interest_paid: money(allocation.interestPaid),
+        extra_principal: money(allocation.extraPrincipal),
+        balance_after: money(allocation.balanceAfter),
+      })
+      .eq("id", row.id);
+  }
+
+  if (replay.settled) {
+    await db.from("credits").update({ status: "paid" }).eq("id", credit.id);
+  }
+
   if (partner) {
     await db
       .from("credit_members")
@@ -239,11 +307,12 @@ async function createCredit(spec) {
   }
 
   console.log(
-    `✓ ${spec.name} · ${plan.length} cuotas · ${events.length} movimientos${
-      partner ? " · compartido" : ""
-    }`,
+    `✓ ${spec.name.padEnd(10)} saldo ${fmt(replay.balance).padStart(13)} · ` +
+      `${replay.rows.filter((r) => r.paid).length} pagadas / ` +
+      `${replay.rows.filter((r) => !r.paid).length} restantes` +
+      (partner ? " · compartido" : ""),
   );
-  return credit;
+  return { credit, replay };
 }
 
 await createCredit({
@@ -253,7 +322,7 @@ await createCredit({
   notes: "Crédito de vehículo AV Villas · tasa variable IBR + puntos",
 });
 
-await createCredit({
+const lote = await createCredit({
   ...LOTE,
   name: "Lote",
   type: "property",
