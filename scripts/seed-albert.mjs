@@ -89,7 +89,10 @@ for (const file of [".env.local", ".env"]) {
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const [, , ownerEmail, partnerEmail] = process.argv;
+const args = process.argv.slice(2).filter((a) => a !== "--reset");
+const [ownerEmail, partnerEmail] = args;
+/** Borra los créditos y tarjetas del usuario antes de cargar. */
+const reset = process.argv.includes("--reset");
 
 if (!url || !serviceKey) {
   console.error(
@@ -99,7 +102,7 @@ if (!url || !serviceKey) {
 }
 if (!ownerEmail) {
   console.error(
-    "Uso: node scripts/seed-albert.mjs tu@correo.com [correo-de-tu-esposa]",
+    "Uso: node scripts/seed-albert.mjs tu@correo.com [correo-de-tu-esposa] [--reset]",
   );
   process.exit(1);
 }
@@ -130,6 +133,27 @@ const owner = await findUser(ownerEmail);
 if (!owner) {
   console.error(`No existe ningún usuario con el correo ${ownerEmail}.`);
   process.exit(1);
+}
+
+// Limpieza opcional: sin ella, volver a ejecutar el script duplicaría los
+// créditos en vez de reemplazarlos.
+if (reset) {
+  const { data: existing } = await db
+    .from("credits")
+    .select("id, name")
+    .eq("owner_id", owner.id);
+  const { data: existingCards } = await db
+    .from("revolving_accounts")
+    .select("id, name")
+    .eq("owner_id", owner.id);
+
+  for (const row of existing ?? []) console.log(`  − crédito ${row.name}`);
+  for (const row of existingCards ?? []) console.log(`  − tarjeta ${row.name}`);
+
+  // El plan, los pagos y la actividad se van en cascada.
+  await db.from("credits").delete().eq("owner_id", owner.id);
+  await db.from("revolving_accounts").delete().eq("owner_id", owner.id);
+  await db.from("activity").delete().eq("user_id", owner.id);
 }
 
 const partner = partnerEmail ? await findUser(partnerEmail) : null;

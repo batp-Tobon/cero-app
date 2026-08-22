@@ -68,12 +68,13 @@ A partir de ahí gestionas los roles desde *Perfil → Administración*.
 
 ```bash
 npm run seed -- tu@correo.com                    # créditos de ejemplo
-node scripts/seed-albert.mjs tu@correo.com otro@correo.com   # datos reales AV Villas
+node scripts/seed-albert.mjs tu@correo.com otro@correo.com --reset  # datos reales AV Villas
 ```
 
 El segundo carga el Vehículo, el Lote y la tarjeta desde los documentos del
-banco, y comparte los dos créditos con el segundo correo. Lee su cabecera: el
-Lote lleva parámetros que hay que confirmar con la entidad.
+banco, y comparte los dos créditos con el segundo correo. `--reset` borra antes
+los productos que ya tuviera ese usuario, para no duplicarlos. Lee su cabecera:
+el Lote lleva parámetros que hay que confirmar con la entidad.
 
 Después, en *Perfil → Administración*, pulsa **Reconstruir plan de pagos** en
 cada crédito para derivar el cronograma desde los movimientos cargados.
