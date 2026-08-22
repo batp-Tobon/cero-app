@@ -3,6 +3,8 @@ import type { Metadata } from "next";
 import { CreditCard, Plus, Wallet } from "lucide-react";
 import { getCreditSummaries } from "@/server/queries/credits";
 import { getRevolvingSummaries } from "@/server/queries/revolving";
+import { getAllCreditMembers } from "@/server/actions/members";
+import { getCurrentUser } from "@/infrastructure/supabase/server";
 import { CreditCard as CreditItem } from "@/components/credits/credit-card";
 import { RevolvingCard } from "@/components/revolving/revolving-card";
 import { PageHeader } from "@/components/layout/page-header";
@@ -14,10 +16,14 @@ export const metadata: Metadata = { title: "Créditos" };
 export default async function CreditsPage() {
   let summaries;
   let cards;
+  let membersByCredit;
+  let user;
   try {
-    [summaries, cards] = await Promise.all([
+    [summaries, cards, membersByCredit, user] = await Promise.all([
       getCreditSummaries(),
       getRevolvingSummaries(),
+      getAllCreditMembers(),
+      getCurrentUser(),
     ]);
   } catch (error) {
     return (
@@ -64,7 +70,12 @@ export default async function CreditsPage() {
       ) : (
         <div className="mt-5 space-y-2.5">
           {active.map((credit) => (
-            <CreditItem key={credit.id} credit={credit} />
+            <CreditItem
+              key={credit.id}
+              credit={credit}
+              members={membersByCredit.get(credit.id) ?? []}
+              isOwner={credit.owner_id === user?.id}
+            />
           ))}
 
           <section aria-labelledby="cards" className="pt-5">
@@ -103,7 +114,12 @@ export default async function CreditsPage() {
                 Terminados
               </h2>
               {settled.map((credit) => (
-                <CreditItem key={credit.id} credit={credit} />
+                <CreditItem
+                  key={credit.id}
+                  credit={credit}
+                  members={membersByCredit.get(credit.id) ?? []}
+                  isOwner={credit.owner_id === user?.id}
+                />
               ))}
             </>
           )}

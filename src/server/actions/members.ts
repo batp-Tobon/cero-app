@@ -44,6 +44,52 @@ export async function getCreditMembers(
     .sort((a, b) => (a.role === "owner" ? -1 : b.role === "owner" ? 1 : 0));
 }
 
+/**
+ * Miembros de TODOS los créditos que ve el usuario, en una sola consulta.
+ * La lista tiene una fila por crédito; pedir los miembros de cada uno por
+ * separado sería una consulta por tarjeta.
+ */
+export async function getAllCreditMembers(): Promise<
+  Map<string, CreditMember[]>
+> {
+  const supabase = await createClient();
+  const user = await getCurrentUser();
+
+  const { data, error } = await supabase
+    .from("credit_members")
+    .select("credit_id, user_id, role, profiles(full_name, email)");
+
+  if (error) throw new Error(error.message);
+
+  type Joined = {
+    credit_id: string;
+    user_id: string;
+    role: "owner" | "member";
+    profiles: { full_name: string | null; email: string | null } | null;
+  };
+
+  const grouped = new Map<string, CreditMember[]>();
+  for (const row of (data ?? []) as unknown as Joined[]) {
+    const member: CreditMember = {
+      userId: row.user_id,
+      fullName: row.profiles?.full_name ?? null,
+      email: row.profiles?.email ?? null,
+      role: row.role,
+      isYou: row.user_id === user?.id,
+    };
+    const list = grouped.get(row.credit_id);
+    if (list) list.push(member);
+    else grouped.set(row.credit_id, [member]);
+  }
+
+  // El dueño primero, igual que en el detalle.
+  for (const list of grouped.values()) {
+    list.sort((a, b) => (a.role === "owner" ? -1 : b.role === "owner" ? 1 : 0));
+  }
+
+  return grouped;
+}
+
 const shareSchema = z.object({
   creditId: z.string().uuid(),
   email: z.string().trim().email("Escribe un correo válido."),

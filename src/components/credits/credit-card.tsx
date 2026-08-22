@@ -3,6 +3,7 @@ import { ChevronRight } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
+import { ShareRow } from "@/components/credits/share-row";
 import { creditTypeIcon, creditTypeLabel } from "@/lib/constants";
 import { accent, productIcon } from "@/lib/appearance";
 import { ProductBadge } from "@/components/common/product-badge";
@@ -10,9 +11,24 @@ import { formatMoney } from "@/lib/format";
 import { formatShortDate } from "@/lib/dates";
 import { percent } from "@/lib/utils";
 import type { CreditSummary } from "@/types/domain";
+import type { CreditMember } from "@/server/actions/members";
 
-/** Tarjeta de la lista de créditos. Toda ella es el enlace al detalle. */
-export function CreditCard({ credit }: { credit: CreditSummary }) {
+/**
+ * Tarjeta de la lista de créditos.
+ *
+ * El bloque de datos es el enlace al detalle; compartir queda FUERA de ese
+ * enlace: un botón dentro de otro enlace no es HTML válido, y en móvil acabaría
+ * abriendo el detalle al intentar pulsarlo.
+ */
+export function CreditCard({
+  credit,
+  members = [],
+  isOwner,
+}: {
+  credit: CreditSummary;
+  members?: CreditMember[];
+  isOwner: boolean;
+}) {
   const Icon = productIcon(credit.icon, creditTypeIcon(credit.type));
   const classes = accent(credit.color);
   const settled = credit.status === "paid";
@@ -22,11 +38,11 @@ export function CreditCard({ credit }: { credit: CreditSummary }) {
     .join(" · ");
 
   return (
-    <Link
-      href={`/creditos/${credit.id}`}
-      className="block rounded-3xl focus-visible:ring-2 focus-visible:ring-ring"
-    >
-      <Card className="transition-colors hover:bg-secondary">
+    <Card className="p-0">
+      <Link
+        href={`/creditos/${credit.id}`}
+        className="block rounded-3xl p-5 pb-4 transition-colors hover:bg-secondary focus-visible:ring-2 focus-visible:ring-ring"
+      >
         <div className="flex items-start gap-3">
           <ProductBadge icon={Icon} color={credit.color} />
 
@@ -72,7 +88,16 @@ export function CreditCard({ credit }: { credit: CreditSummary }) {
             {credit.paid_installments} / {credit.total_installments} cuotas
           </p>
         </div>
-      </Card>
-    </Link>
+      </Link>
+
+      <div className="border-t border-border/60 px-2 py-1">
+        <ShareRow
+          creditId={credit.id}
+          creditName={credit.name}
+          members={members}
+          isOwner={isOwner}
+        />
+      </div>
+    </Card>
   );
 }
