@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { creditTypeIcon, creditTypeLabel } from "@/lib/constants";
 import { accent, productIcon } from "@/lib/appearance";
-import { ProductBadge } from "@/components/common/appearance-picker";
+import { ProductBadge } from "@/components/common/product-badge";
 import { formatMoney } from "@/lib/format";
 import { formatShortDate } from "@/lib/dates";
 import { percent } from "@/lib/utils";

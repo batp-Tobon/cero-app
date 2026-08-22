@@ -7,7 +7,7 @@ import { formatMoney } from "@/lib/format";
 import { formatShortDate, todayISO } from "@/lib/dates";
 import { percent } from "@/lib/utils";
 import { accent, productIcon } from "@/lib/appearance";
-import { ProductBadge } from "@/components/common/appearance-picker";
+import { ProductBadge } from "@/components/common/product-badge";
 import type { RevolvingSummary } from "@/server/queries/revolving";
 
 /**

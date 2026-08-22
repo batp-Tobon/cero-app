@@ -6,7 +6,7 @@ import { PayButton } from "@/components/payments/payment-actions";
 import { MovementButton } from "@/components/revolving/revolving-actions";
 import { creditTypeIcon } from "@/lib/constants";
 import { productIcon } from "@/lib/appearance";
-import { ProductBadge } from "@/components/common/appearance-picker";
+import { ProductBadge } from "@/components/common/product-badge";
 import { formatMoney } from "@/lib/format";
 import { formatShortDate, diffDays, todayISO } from "@/lib/dates";
 import type { UpcomingItem } from "@/types/domain";

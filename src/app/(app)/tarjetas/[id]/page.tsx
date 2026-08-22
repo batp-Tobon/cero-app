@@ -20,7 +20,7 @@ import { formatMoney, formatPercent, formatRate } from "@/lib/format";
 import { formatLongDate, formatShortDate } from "@/lib/dates";
 import { percent } from "@/lib/utils";
 import { accent, productIcon } from "@/lib/appearance";
-import { ProductBadge } from "@/components/common/appearance-picker";
+import { ProductBadge } from "@/components/common/product-badge";
 import type { MovementKindDB } from "@/types/database";
 
 type Params = { params: Promise<{ id: string }> };

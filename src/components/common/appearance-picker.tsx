@@ -105,38 +105,3 @@ export function AppearancePicker({
     </div>
   );
 }
-
-/** Círculo del producto: el mismo que se usa en las listas. */
-export function ProductBadge({
-  icon: Icon,
-  color,
-  size = "md",
-  className,
-}: {
-  icon: React.ComponentType<{ className?: string }>;
-  color: string | null | undefined;
-  size?: "sm" | "md" | "lg";
-  className?: string;
-}) {
-  const classes = accent(color);
-  return (
-    <span
-      aria-hidden
-      className={cn(
-        "flex shrink-0 items-center justify-center rounded-full",
-        size === "sm" && "h-9 w-9",
-        size === "md" && "h-10 w-10",
-        size === "lg" && "h-14 w-14",
-        classes.chip,
-        className,
-      )}
-    >
-      <Icon
-        className={cn(
-          size === "lg" ? "h-6 w-6" : "h-4 w-4",
-          classes.text,
-        )}
-      />
-    </span>
-  );
-}
