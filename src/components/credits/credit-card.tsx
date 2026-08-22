@@ -4,6 +4,8 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { creditTypeIcon, creditTypeLabel } from "@/lib/constants";
+import { accent, productIcon } from "@/lib/appearance";
+import { ProductBadge } from "@/components/common/appearance-picker";
 import { formatMoney } from "@/lib/format";
 import { formatShortDate } from "@/lib/dates";
 import { percent } from "@/lib/utils";
@@ -11,7 +13,8 @@ import type { CreditSummary } from "@/types/domain";
 
 /** Tarjeta de la lista de créditos. Toda ella es el enlace al detalle. */
 export function CreditCard({ credit }: { credit: CreditSummary }) {
-  const Icon = creditTypeIcon(credit.type);
+  const Icon = productIcon(credit.icon, creditTypeIcon(credit.type));
+  const classes = accent(credit.color);
   const settled = credit.status === "paid";
   const progress = percent(credit.paid_installments, credit.total_installments);
   const subtitle = [creditTypeLabel(credit.type), credit.entity]
@@ -25,9 +28,7 @@ export function CreditCard({ credit }: { credit: CreditSummary }) {
     >
       <Card className="transition-colors hover:bg-secondary">
         <div className="flex items-start gap-3">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-secondary">
-            <Icon className="h-4 w-4 text-muted-foreground" aria-hidden />
-          </span>
+          <ProductBadge icon={Icon} color={credit.color} />
 
           <div className="min-w-0 flex-1">
             <h3 className="truncate text-sm font-semibold">{credit.name}</h3>
@@ -64,6 +65,7 @@ export function CreditCard({ credit }: { credit: CreditSummary }) {
         <div className="mt-3 space-y-1.5">
           <Progress
             value={progress}
+            indicatorClassName={classes.bar}
             aria-label={`${credit.paid_installments} de ${credit.total_installments} cuotas pagadas`}
           />
           <p className="tabular text-xs text-muted-foreground">

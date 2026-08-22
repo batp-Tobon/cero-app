@@ -5,6 +5,8 @@ import { Badge } from "@/components/ui/badge";
 import { PayButton } from "@/components/payments/payment-actions";
 import { MovementButton } from "@/components/revolving/revolving-actions";
 import { creditTypeIcon } from "@/lib/constants";
+import { productIcon } from "@/lib/appearance";
+import { ProductBadge } from "@/components/common/appearance-picker";
 import { formatMoney } from "@/lib/format";
 import { formatShortDate, diffDays, todayISO } from "@/lib/dates";
 import type { UpcomingItem } from "@/types/domain";
@@ -39,8 +41,10 @@ export function UpcomingPayments({ items }: { items: UpcomingItem[] }) {
           const overdue = item.state === "overdue";
           const soon = !overdue && diffDays(today, item.dueDate) <= 7;
 
-          const Icon =
-            item.kind === "credit" ? creditTypeIcon(item.creditType) : CreditCard;
+          const Icon = productIcon(
+            item.icon,
+            item.kind === "credit" ? creditTypeIcon(item.creditType) : CreditCard,
+          );
           const href =
             item.kind === "credit"
               ? `/creditos/${item.creditId}`
@@ -55,9 +59,7 @@ export function UpcomingPayments({ items }: { items: UpcomingItem[] }) {
           return (
             <li key={href + item.dueDate}>
               <Card className="flex items-center gap-3 p-4">
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-secondary">
-                  <Icon className="h-4 w-4 text-muted-foreground" aria-hidden />
-                </span>
+                <ProductBadge icon={Icon} color={item.color} />
 
                 <div className="min-w-0 flex-1">
                   <Link

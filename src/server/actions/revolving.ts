@@ -129,6 +129,22 @@ export async function createRevolvingAccount(
   return { ok: true, data: { id: account.id } };
 }
 
+const colorSchema = z.enum(["emerald", "sky", "violet", "rose", "amber", "orange", "teal", "indigo"]);
+const iconSchema = z.enum([
+      "car",
+      "house",
+      "building",
+      "card",
+      "wallet",
+      "bank",
+      "study",
+      "travel",
+      "health",
+      "phone",
+      "furniture",
+      "work",
+]);
+
 const updateAccountSchema = z.object({
   id: z.string().uuid(),
   name: z.string().trim().min(1).max(80),
@@ -138,6 +154,8 @@ const updateAccountSchema = z.object({
   dueDay: z.number().int().min(1).max(31),
   interestRateMonthly: z.number().min(0).max(99),
   notes: z.string().trim().max(500).optional().nullable(),
+  color: colorSchema,
+  icon: iconSchema.nullable().optional(),
 });
 
 export async function updateRevolvingAccount(
@@ -163,6 +181,8 @@ export async function updateRevolvingAccount(
       due_day: value.dueDay,
       interest_rate_monthly: value.interestRateMonthly / 100,
       notes: value.notes?.trim() || null,
+      color: value.color,
+      icon: value.icon ?? null,
     })
     .eq("id", value.id);
 

@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
-import { CheckCircle2, Users } from "lucide-react";
+import { CheckCircle2 } from "lucide-react";
 import { getCreditDetail, getCreditPayments } from "@/server/queries/credits";
 import { getCreditMembers } from "@/server/actions/members";
 import { getCurrentUser } from "@/infrastructure/supabase/server";
@@ -9,6 +9,7 @@ import { CardEyebrow } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { ScheduleList } from "@/components/credits/schedule-list";
 import { CreditMenu } from "@/components/credits/credit-menu";
+import { ShareButton } from "@/components/credits/share-button";
 import { PaymentHistory } from "@/components/payments/payment-history";
 import {
   ExtraPrincipalButton,
@@ -41,7 +42,6 @@ export default async function CreditDetailPage({ params }: Params) {
     getCreditPayments(id),
   ]);
   const isOwner = credit.owner_id === user?.id;
-  const sharedWith = members.filter((m) => m.role !== "owner");
   const subtitle = [credit.entity, creditTypeLabel(credit.type)]
     .filter(Boolean)
     .join(" · ");
@@ -75,7 +75,7 @@ export default async function CreditDetailPage({ params }: Params) {
         backHref="/creditos"
         centered
         action={
-          <CreditMenu credit={credit} members={members} isOwner={isOwner} />
+          <CreditMenu credit={credit} isOwner={isOwner} />
         }
       />
 
@@ -86,15 +86,14 @@ export default async function CreditDetailPage({ params }: Params) {
         </p>
       </section>
 
-      {sharedWith.length > 0 && (
-        <p className="mt-3 flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
-          <Users className="h-3.5 w-3.5" aria-hidden />
-          Compartido con{" "}
-          {sharedWith
-            .map((m) => m.fullName ?? m.email ?? "otra persona")
-            .join(", ")}
-        </p>
-      )}
+      <div className="flex justify-center">
+        <ShareButton
+          creditId={credit.id}
+          creditName={credit.name}
+          members={members}
+          isOwner={isOwner}
+        />
+      </div>
 
       <dl className="mt-7 grid grid-cols-3 gap-2.5">
         <Stat

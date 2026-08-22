@@ -54,6 +54,8 @@ export interface PaymentTarget {
 /** Cuota de un crédito en "Próximos pagos". */
 export interface UpcomingPayment extends PaymentTarget {
   creditType: CreditType;
+  color: string;
+  icon: string | null;
   state: InstallmentState;
 }
 
@@ -62,6 +64,8 @@ export interface UpcomingStatement {
   accountId: string;
   accountName: string;
   currency: string;
+  color: string;
+  icon: string | null;
   dueDate: string;
   amount: number;
   minimum: number;

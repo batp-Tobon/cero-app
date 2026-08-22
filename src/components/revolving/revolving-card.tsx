@@ -6,6 +6,8 @@ import { Progress } from "@/components/ui/progress";
 import { formatMoney } from "@/lib/format";
 import { formatShortDate, todayISO } from "@/lib/dates";
 import { percent } from "@/lib/utils";
+import { accent, productIcon } from "@/lib/appearance";
+import { ProductBadge } from "@/components/common/appearance-picker";
 import type { RevolvingSummary } from "@/server/queries/revolving";
 
 /**
@@ -13,7 +15,10 @@ import type { RevolvingSummary } from "@/server/queries/revolving";
  * llenarse es lo malo, así que se pinta en ámbar y en rojo cuando aprieta.
  */
 export function RevolvingCard({ account }: { account: RevolvingSummary }) {
-  const Icon = account.kind === "credit_card" ? CreditCard : Wallet;
+  const Icon = productIcon(
+    account.icon,
+    account.kind === "credit_card" ? CreditCard : Wallet,
+  );
   const used = percent(Number(account.balance), Number(account.credit_limit));
   const overdue =
     account.statement_due_date != null &&
@@ -28,9 +33,7 @@ export function RevolvingCard({ account }: { account: RevolvingSummary }) {
     >
       <Card className="transition-colors hover:bg-secondary">
         <div className="flex items-start gap-3">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-secondary">
-            <Icon className="h-4 w-4 text-muted-foreground" aria-hidden />
-          </span>
+          <ProductBadge icon={Icon} color={account.color} />
 
           <div className="min-w-0 flex-1">
             <h3 className="truncate text-sm font-semibold">{account.name}</h3>
@@ -57,12 +60,14 @@ export function RevolvingCard({ account }: { account: RevolvingSummary }) {
           <Progress
             value={used}
             aria-label={`${Math.round(used)}% del cupo usado`}
+            // El cupo usado avisa por si solo: en rojo cuando aprieta, y con
+            // el color del producto mientras haya holgura.
             indicatorClassName={
               used >= 80
                 ? "bg-destructive"
                 : used >= 50
                   ? "bg-warning"
-                  : "bg-primary"
+                  : accent(account.color).bar
             }
           />
           <div className="flex items-baseline justify-between gap-4 text-xs text-muted-foreground">

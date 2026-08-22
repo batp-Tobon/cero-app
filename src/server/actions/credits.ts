@@ -126,12 +126,31 @@ export async function createCredit(
   return { ok: true, data: { id: credit.id } };
 }
 
+/** Tokens de apariencia; la app decide qué significan (ver lib/appearance). */
+const colorSchema = z.enum(["emerald", "sky", "violet", "rose", "amber", "orange", "teal", "indigo"]);
+const iconSchema = z.enum([
+      "car",
+      "house",
+      "building",
+      "card",
+      "wallet",
+      "bank",
+      "study",
+      "travel",
+      "health",
+      "phone",
+      "furniture",
+      "work",
+]);
+
 const updateSchema = z.object({
   id: z.string().uuid(),
   name: z.string().trim().min(1).max(80),
   entity: z.string().trim().max(80).optional().nullable(),
   notes: z.string().trim().max(500).optional().nullable(),
   extraPrincipalMode: z.enum(["reduce_term", "reduce_installment"]),
+  color: colorSchema,
+  icon: iconSchema.nullable().optional(),
 });
 
 /**
@@ -159,6 +178,8 @@ export async function updateCredit(
       entity: value.entity?.trim() || null,
       notes: value.notes?.trim() || null,
       extra_principal_mode: value.extraPrincipalMode,
+      color: value.color,
+      icon: value.icon ?? null,
     })
     .eq("id", value.id);
 

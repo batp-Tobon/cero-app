@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { creditTypeIcon } from "@/lib/constants";
+import { accent, productIcon } from "@/lib/appearance";
+import { cn } from "@/lib/utils";
 import { formatMoney, formatPercent } from "@/lib/format";
 import { percent } from "@/lib/utils";
 import type { CreditSummary } from "@/types/domain";
@@ -29,7 +31,8 @@ export function CreditMix({
 
       <ul className="mt-3 space-y-2.5">
         {sorted.map((credit) => {
-          const Icon = creditTypeIcon(credit.type);
+          const Icon = productIcon(credit.icon, creditTypeIcon(credit.type));
+          const classes = accent(credit.color);
           const share = percent(Number(credit.balance), totalDebt);
           const progress = percent(
             credit.paid_installments,
@@ -44,7 +47,7 @@ export function CreditMix({
               >
                 <div className="flex items-center gap-2.5">
                   <Icon
-                    className="h-4 w-4 shrink-0 text-muted-foreground"
+                    className={cn("h-4 w-4 shrink-0", classes.text)}
                     aria-hidden
                   />
                   <span className="min-w-0 flex-1 truncate text-sm font-medium">
@@ -61,7 +64,7 @@ export function CreditMix({
                     role="presentation"
                   >
                     <div
-                      className="h-full rounded-full bg-primary/70"
+                      className={cn("h-full rounded-full", classes.bar)}
                       style={{ width: `${share}%` }}
                     />
                   </div>

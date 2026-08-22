@@ -14,37 +14,35 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { OptionGrid } from "@/components/common/option-grid";
+import { AmountField } from "@/components/common/amount-field";
 import { AppearancePicker } from "@/components/common/appearance-picker";
-import type { AccentColor, IconName } from "@/lib/appearance";
 import { InlineNotice } from "@/components/common/states";
-import { deleteCredit, updateCredit } from "@/server/actions/credits";
-import { EXTRA_PRINCIPAL_MODES } from "@/lib/constants";
-import type { ExtraPrincipalMode } from "@/core/domain/amortization";
-import type { Credit } from "@/types/domain";
+import {
+  deleteRevolvingAccount,
+  updateRevolvingAccount,
+} from "@/server/actions/revolving";
+import type { AccentColor, IconName } from "@/lib/appearance";
+import type { RevolvingAccountRow } from "@/types/database";
 
-/**
- * Ajustes del crédito. Monto, tasa y plazo no se editan: ya hay pagos
- * calculados sobre ellos y cambiarlos falsearía el histórico.
- */
-export function CreditMenu({
-  credit,
-  isOwner,
-}: {
-  credit: Credit;
-  isOwner: boolean;
-}) {
+/** Ajustes de la tarjeta: datos del producto, apariencia y baja. */
+export function RevolvingMenu({ account }: { account: RevolvingAccountRow }) {
   const router = useRouter();
   const [open, setOpen] = React.useState(false);
-  const [name, setName] = React.useState(credit.name);
-  const [entity, setEntity] = React.useState(credit.entity ?? "");
-  const [notes, setNotes] = React.useState(credit.notes ?? "");
-  const [mode, setMode] = React.useState<ExtraPrincipalMode>(
-    credit.extra_principal_mode,
+  const [name, setName] = React.useState(account.name);
+  const [entity, setEntity] = React.useState(account.entity ?? "");
+  const [creditLimit, setCreditLimit] = React.useState(
+    Number(account.credit_limit),
   );
-  const [color, setColor] = React.useState<AccentColor>(credit.color);
+  const [statementDay, setStatementDay] = React.useState(
+    String(account.statement_day),
+  );
+  const [dueDay, setDueDay] = React.useState(String(account.due_day));
+  const [rate, setRate] = React.useState(
+    String(Number(account.interest_rate_monthly) * 100 || ""),
+  );
+  const [color, setColor] = React.useState<AccentColor>(account.color);
   const [icon, setIcon] = React.useState<IconName | null>(
-    (credit.icon as IconName | null) ?? null,
+    (account.icon as IconName | null) ?? null,
   );
   const [pending, setPending] = React.useState(false);
   const [confirmingDelete, setConfirmingDelete] = React.useState(false);
@@ -59,12 +57,14 @@ export function CreditMenu({
     setError(null);
     setPending(true);
 
-    const result = await updateCredit({
-      id: credit.id,
+    const result = await updateRevolvingAccount({
+      id: account.id,
       name,
       entity,
-      notes,
-      extraPrincipalMode: mode,
+      creditLimit,
+      statementDay: Number(statementDay) || 1,
+      dueDay: Number(dueDay) || 1,
+      interestRateMonthly: Number(rate.replace(",", ".")) || 0,
       color,
       icon,
     });
@@ -75,7 +75,7 @@ export function CreditMenu({
       return;
     }
 
-    toast.success("Crédito actualizado");
+    toast.success("Tarjeta actualizada");
     setOpen(false);
     router.refresh();
   }
@@ -83,7 +83,7 @@ export function CreditMenu({
   async function onDelete() {
     setError(null);
     setPending(true);
-    const result = await deleteCredit(credit.id);
+    const result = await deleteRevolvingAccount(account.id);
 
     if (!result.ok) {
       setPending(false);
@@ -91,7 +91,7 @@ export function CreditMenu({
       return;
     }
 
-    toast.success("Crédito eliminado");
+    toast.success("Tarjeta eliminada");
     setOpen(false);
     router.replace("/creditos");
     router.refresh();
@@ -102,7 +102,7 @@ export function CreditMenu({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        aria-label="Ajustes del crédito"
+        aria-label="Ajustes de la tarjeta"
         className="flex h-10 w-10 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
       >
         <MoreHorizontal className="h-5 w-5" aria-hidden />
@@ -111,21 +111,19 @@ export function CreditMenu({
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetContent>
           <SheetHeader>
-            <SheetTitle>Ajustes del crédito</SheetTitle>
+            <SheetTitle>Ajustes de la tarjeta</SheetTitle>
             <SheetDescription>
-              El monto, la tasa y el plazo no se editan: hay pagos calculados
-              sobre ellos.
+              El saldo no se edita aquí: sale de los movimientos registrados.
             </SheetDescription>
           </SheetHeader>
 
-          {isOwner && (
           <form onSubmit={onSave} className="space-y-4">
             {error && <InlineNotice variant="danger">{error}</InlineNotice>}
 
             <div className="space-y-1.5">
-              <Label htmlFor="credit-name">Nombre</Label>
+              <Label htmlFor="rev-edit-name">Nombre</Label>
               <Input
-                id="credit-name"
+                id="rev-edit-name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 maxLength={80}
@@ -135,37 +133,71 @@ export function CreditMenu({
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="credit-entity">Entidad</Label>
+              <Label htmlFor="rev-edit-entity">Entidad</Label>
               <Input
-                id="credit-entity"
+                id="rev-edit-entity"
                 value={entity}
                 onChange={(e) => setEntity(e.target.value)}
-                placeholder="Banco, concesionario…"
                 maxLength={80}
                 disabled={pending}
               />
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="credit-notes">Notas</Label>
-              <Input
-                id="credit-notes"
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                maxLength={500}
+              <Label htmlFor="rev-edit-limit">Cupo total</Label>
+              <AmountField
+                id="rev-edit-limit"
+                value={creditLimit}
+                onValueChange={setCreditLimit}
                 disabled={pending}
               />
             </div>
 
-            <div className="space-y-2">
-              <Label>Al abonar a capital</Label>
-              <OptionGrid
-                legend="Qué hacer con los abonos a capital"
-                options={EXTRA_PRINCIPAL_MODES}
-                value={mode}
-                onChange={setMode}
-                columns={1}
-              />
+            <div className="grid grid-cols-3 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="rev-edit-rate">Tasa</Label>
+                <div className="relative">
+                  <Input
+                    id="rev-edit-rate"
+                    inputMode="decimal"
+                    value={rate}
+                    onChange={(e) => setRate(e.target.value)}
+                    placeholder="0,00"
+                    disabled={pending}
+                    className="pr-8"
+                  />
+                  <span
+                    className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground"
+                    aria-hidden
+                  >
+                    %
+                  </span>
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="rev-edit-cut">Corte</Label>
+                <Input
+                  id="rev-edit-cut"
+                  inputMode="numeric"
+                  value={statementDay}
+                  onChange={(e) =>
+                    setStatementDay(e.target.value.replace(/\D/g, "").slice(0, 2))
+                  }
+                  disabled={pending}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="rev-edit-due">Pago</Label>
+                <Input
+                  id="rev-edit-due"
+                  inputMode="numeric"
+                  value={dueDay}
+                  onChange={(e) =>
+                    setDueDay(e.target.value.replace(/\D/g, "").slice(0, 2))
+                  }
+                  disabled={pending}
+                />
+              </div>
             </div>
 
             <div className="border-t border-border pt-4">
@@ -186,15 +218,13 @@ export function CreditMenu({
               Guardar cambios
             </Button>
           </form>
-          )}
 
-          {isOwner && (
           <div className="mt-6 border-t border-border pt-5">
             {confirmingDelete ? (
               <div className="space-y-3">
                 <InlineNotice variant="danger">
-                  Se borrarán el crédito, su plan de pagos y todos sus pagos
-                  registrados. No se puede deshacer.
+                  Se borran la tarjeta, sus movimientos y sus extractos. No se
+                  puede deshacer.
                 </InlineNotice>
                 <div className="flex gap-2.5">
                   <Button
@@ -225,11 +255,10 @@ export function CreditMenu({
                 onClick={() => setConfirmingDelete(true)}
               >
                 <Trash2 className="h-4 w-4" aria-hidden />
-                Eliminar crédito
+                Eliminar tarjeta
               </Button>
             )}
           </div>
-          )}
         </SheetContent>
       </Sheet>
     </>

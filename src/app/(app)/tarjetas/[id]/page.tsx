@@ -3,11 +3,13 @@ import type { Metadata } from "next";
 import {
   ArrowDownCircle,
   ArrowUpCircle,
+  CreditCard,
   Percent,
   Receipt,
 } from "lucide-react";
 import { getRevolvingDetail } from "@/server/queries/revolving";
 import { PageHeader } from "@/components/layout/page-header";
+import { RevolvingMenu } from "@/components/revolving/revolving-menu";
 import { CardEyebrow } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import {
@@ -17,6 +19,8 @@ import {
 import { formatMoney, formatPercent, formatRate } from "@/lib/format";
 import { formatLongDate, formatShortDate } from "@/lib/dates";
 import { percent } from "@/lib/utils";
+import { accent, productIcon } from "@/lib/appearance";
+import { ProductBadge } from "@/components/common/appearance-picker";
 import type { MovementKindDB } from "@/types/database";
 
 type Params = { params: Promise<{ id: string }> };
@@ -60,9 +64,16 @@ export default async function RevolvingDetailPage({ params }: Params) {
         subtitle={subtitle || undefined}
         backHref="/creditos"
         centered
+        action={<RevolvingMenu account={account} />}
       />
 
       <section aria-labelledby="balance" className="mt-7 text-center">
+        <ProductBadge
+          icon={productIcon(account.icon, CreditCard)}
+          color={account.color}
+          size="lg"
+          className="mx-auto mb-4"
+        />
         <CardEyebrow id="balance">Cupo usado</CardEyebrow>
         <p className="tabular mt-2 text-[2.4rem] font-bold leading-none tracking-tight">
           {formatMoney(balance, account.currency)}
@@ -77,7 +88,11 @@ export default async function RevolvingDetailPage({ params }: Params) {
           value={used}
           aria-label={`${Math.round(used)}% del cupo usado`}
           indicatorClassName={
-            used >= 80 ? "bg-destructive" : used >= 50 ? "bg-warning" : "bg-primary"
+            used >= 80
+              ? "bg-destructive"
+              : used >= 50
+                ? "bg-warning"
+                : accent(account.color).bar
           }
         />
         <div className="flex items-baseline justify-between gap-4 text-xs text-muted-foreground">

@@ -19,6 +19,15 @@ export type AmortizationSystemDB =
 
 export type CreditStatusDB = "active" | "paid" | "cancelled";
 export type UserRoleDB = "user" | "admin";
+export type AccentColorDB =
+  | "emerald"
+  | "sky"
+  | "violet"
+  | "rose"
+  | "amber"
+  | "orange"
+  | "teal"
+  | "indigo";
 export type RevolvingKindDB = "credit_card" | "credit_line";
 export type RevolvingStatusDB = "active" | "closed";
 export type StatementStatusDB = "open" | "paid" | "overdue";
@@ -62,6 +71,8 @@ export type CreditRow = {
   first_payment_date: string;
   currency: string;
   status: CreditStatusDB;
+  color: AccentColorDB;
+  icon: string | null;
   notes: string | null;
   created_at: string;
   updated_at: string;
@@ -146,6 +157,8 @@ export type RevolvingAccountRow = {
   due_day: number;
   currency: string;
   status: RevolvingStatusDB;
+  color: AccentColorDB;
+  icon: string | null;
   notes: string | null;
   created_at: string;
   updated_at: string;
@@ -191,6 +204,8 @@ export type RevolvingSummaryRow = {
   due_day: number;
   currency: string;
   status: RevolvingStatusDB;
+  color: AccentColorDB;
+  icon: string | null;
   created_at: string;
   balance: number;
   available: number;
@@ -223,6 +238,9 @@ export type CreditSummaryRow = {
   extra_principal_mode: ExtraPrincipalModeDB;
   first_payment_date: string;
   created_at: string;
+  color: AccentColorDB;
+  icon: string | null;
+  member_count: number;
   total_installments: number;
   paid_installments: number;
   overdue_count: number;
@@ -271,6 +289,8 @@ export type Database = {
           | "currency"
           | "status"
           | "notes"
+          | "color"
+          | "icon"
           | "extra_principal_mode"
           | "interest_rate_monthly"
         >
@@ -326,6 +346,8 @@ export type Database = {
           | "currency"
           | "status"
           | "notes"
+          | "color"
+          | "icon"
         >
       >;
       revolving_statements: Table<
@@ -378,6 +400,7 @@ export type Database = {
       extra_principal_mode: ExtraPrincipalModeDB;
       activity_type: ActivityTypeDB;
       user_role: UserRoleDB;
+      accent_color: AccentColorDB;
       revolving_kind: RevolvingKindDB;
       revolving_status: RevolvingStatusDB;
       statement_status: StatementStatusDB;
