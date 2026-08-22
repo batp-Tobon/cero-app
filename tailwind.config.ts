@@ -1,4 +1,7 @@
 import type { Config } from "tailwindcss";
+// Import ESM en vez de require(): Node 24 carga los .ts como modulos ESM y
+// ahi `require` no existe, asi que Tailwind reventaba al leer la config.
+import animate from "tailwindcss-animate";
 
 const config: Config = {
   darkMode: ["class"],
@@ -81,7 +84,7 @@ const config: Config = {
       },
     },
   },
-  plugins: [require("tailwindcss-animate")],
+  plugins: [animate],
 };
 
 export default config;
