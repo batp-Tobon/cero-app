@@ -33,9 +33,11 @@ export function MonthSummary({
           {formatMoney(monthlyCommitment, currency)}
         </dd>
         <p className="mt-1 text-xs text-muted-foreground">
+          {/* "pagos" y no "cuotas": aquí entran también los extractos de
+              tarjeta, que no son cuotas de nada. */}
           {installmentsDue === 0
-            ? "sin cuotas pendientes"
-            : `${installmentsDue} ${installmentsDue === 1 ? "cuota" : "cuotas"}`}
+            ? "nada pendiente"
+            : `${installmentsDue} ${installmentsDue === 1 ? "pago" : "pagos"}`}
         </p>
       </div>
 

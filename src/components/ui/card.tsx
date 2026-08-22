@@ -1,4 +1,5 @@
 import * as React from "react";
+import { Slot } from "@radix-ui/react-slot";
 import { cn } from "@/lib/utils";
 
 /**
@@ -7,14 +8,19 @@ import { cn } from "@/lib/utils";
  */
 const Card = React.forwardRef<
   HTMLDivElement,
-  React.HTMLAttributes<HTMLDivElement>
->(({ className, ...props }, ref) => (
-  <div
-    ref={ref}
-    className={cn("rounded-3xl bg-card p-5 text-card-foreground", className)}
-    {...props}
-  />
-));
+  React.HTMLAttributes<HTMLDivElement> & { asChild?: boolean }
+>(({ className, asChild = false, ...props }, ref) => {
+  // `asChild` deja que un <section> con su aria-labelledby conserve la
+  // semantica y tome el aspecto de tarjeta, sin envolverlo en un div de mas.
+  const Comp = asChild ? Slot : "div";
+  return (
+    <Comp
+      ref={ref}
+      className={cn("rounded-3xl bg-card p-5 text-card-foreground", className)}
+      {...props}
+    />
+  );
+});
 Card.displayName = "Card";
 
 const CardTitle = React.forwardRef<
