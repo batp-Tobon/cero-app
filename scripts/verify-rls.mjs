@@ -167,11 +167,37 @@ try {
       `devolvió ${members?.length ?? 0} filas`,
     );
 
+    // El cronograma lo escribe la acción del servidor, no la base: aquí se
+    // inserta a mano como Ana para poder comprobar que Beto lo lee.
+    const { error: scheduleWriteError } = await asAna
+      .from("credit_schedule")
+      .insert({
+        credit_id: shared,
+        installment_number: 1,
+        due_date: "2026-01-01",
+        opening_balance: 1_000_000,
+        payment_amount: 88_849,
+        interest_amount: 10_000,
+        principal_amount: 78_849,
+        closing_balance: 921_151,
+      });
+    check("Ana puede escribir el plan de su crédito", !scheduleWriteError,
+      scheduleWriteError?.message);
+
     const { data: schedule } = await asBeto
       .from("credit_schedule")
       .select("id")
       .eq("credit_id", shared);
     check("Beto ve el plan de pagos compartido", (schedule ?? []).length > 0);
+
+    const { data: hiddenSchedule } = await asBeto
+      .from("credit_schedule")
+      .select("id")
+      .eq("credit_id", anaPrivate);
+    check(
+      "Beto NO ve el plan del crédito privado de Ana",
+      (hiddenSchedule ?? []).length === 0,
+    );
 
     const { error: payError } = await asBeto.from("payments").insert({
       credit_id: shared,
