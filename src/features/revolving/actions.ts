@@ -8,11 +8,15 @@ import { formatMoney } from "@/shared/lib/format";
 import type { ActionResult } from "@/shared/types/domain";
 import { requireBillingWriteAccess } from "@/features/billing/access";
 import {
+  claimUploadedReceipt,
   removeReceipt,
-  uploadReceipt,
 } from "@/features/receipts/server";
+import type { PendingReceipt } from "@/features/receipts/constants";
+import { isCalendarDate, todayISO } from "@/shared/lib/dates";
+import { createAdminClient } from "@/infrastructure/supabase/admin";
+import { publicActionError } from "@/shared/lib/server-errors";
 
-const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+const civilDate = z.string().refine(isCalendarDate, "Elige una fecha válida.");
 
 function revalidateRevolving(accountId?: string) {
   revalidatePath("/inicio");
@@ -20,11 +24,6 @@ function revalidateRevolving(accountId?: string) {
   if (accountId) revalidatePath(`/tarjetas/${accountId}`);
   revalidatePath("/actividad");
   revalidatePath("/presupuesto");
-}
-
-function receiptFile(data?: FormData): File | null {
-  const value = data?.get("receipt");
-  return value instanceof File && value.size > 0 ? value : null;
 }
 
 // ---------------------------------------------------------------------------
@@ -45,7 +44,12 @@ const accountSchema = z.object({
   interestRateMonthly: z.number().min(0).max(99).default(0),
   statementDay: z.number().int().min(1).max(31).default(1),
   dueDay: z.number().int().min(1).max(31).default(1),
-  currency: z.string().trim().length(3).default("COP"),
+  currency: z
+    .string()
+    .trim()
+    .regex(/^[A-Za-z]{3}$/, "La moneda debe tener tres letras.")
+    .transform((value) => value.toUpperCase())
+    .default("COP"),
   /** Saldo ya utilizado al dar de alta la tarjeta. */
   openingBalance: z.number().min(0).default(0),
   notes: z.string().trim().max(500).optional().nullable(),
@@ -107,22 +111,39 @@ export async function createRevolvingAccount(
     .single();
 
   if (error || !account) {
-    return { ok: false, error: error?.message ?? "No pudimos crear la tarjeta." };
+    return {
+      ok: false,
+      error: publicActionError("card.create", error, "No pudimos crear la tarjeta."),
+    };
   }
 
   if (value.openingBalance > 0) {
-    const { error: movementError } = await supabase
-      .from("revolving_movements")
-      .insert({
-        account_id: account.id,
-        user_id: user.id,
-        kind: "charge",
-        amount: money(value.openingBalance),
-        description: "Saldo al registrar la tarjeta",
-      });
+    const { error: movementError } = await createAdminClient().rpc(
+      "register_revolving_movement",
+      {
+        p_user_id: user.id,
+        p_account_id: account.id,
+        p_kind: "charge",
+        p_amount: money(value.openingBalance),
+        p_movement_date: todayISO(),
+        p_description: "Saldo al registrar la tarjeta",
+        p_installment_count: 1,
+        p_receipt_path: null,
+        p_receipt_name: null,
+        p_receipt_mime: null,
+        p_receipt_size: null,
+      },
+    );
     if (movementError) {
       await supabase.from("revolving_accounts").delete().eq("id", account.id);
-      return { ok: false, error: movementError.message };
+      return {
+        ok: false,
+        error: publicActionError(
+          "card.opening-balance",
+          movementError,
+          "No pudimos registrar el saldo inicial.",
+        ),
+      };
     }
   }
 
@@ -188,7 +209,25 @@ export async function updateRevolvingAccount(
   if (!user) return { ok: false, error: "Tu sesión expiró." };
 
   const supabase = await createClient();
-  const { error } = await supabase
+  const { data: current, error: currentError } = await supabase
+    .from("revolving_summary")
+    .select("balance")
+    .eq("id", value.id)
+    .maybeSingle();
+  if (currentError) {
+    return { ok: false, error: publicActionError("card.load", currentError) };
+  }
+  if (!current) return { ok: false, error: "No encontramos esa tarjeta." };
+  if (value.creditLimit + 0.009 < Number(current.balance)) {
+    return {
+      ok: false,
+      error: `El cupo no puede quedar por debajo del saldo usado (${formatMoney(
+        current.balance,
+      )}).`,
+    };
+  }
+
+  const { data: updated, error } = await supabase
     .from("revolving_accounts")
     .update({
       name: value.name,
@@ -201,9 +240,14 @@ export async function updateRevolvingAccount(
       color: value.color,
       icon: value.icon ?? null,
     })
-    .eq("id", value.id);
+    .eq("id", value.id)
+    .select("id")
+    .maybeSingle();
 
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: publicActionError("card.update", error) };
+  if (!updated) {
+    return { ok: false, error: "No encontramos esa tarjeta o no puedes editarla." };
+  }
 
   revalidateRevolving(value.id);
   return { ok: true, data: undefined };
@@ -212,21 +256,23 @@ export async function updateRevolvingAccount(
 export async function deleteRevolvingAccount(
   id: string,
 ): Promise<ActionResult> {
+  if (!z.string().uuid().safeParse(id).success) {
+    return { ok: false, error: "La tarjeta no es válida." };
+  }
   const user = await getCurrentUser();
   if (!user) return { ok: false, error: "Tu sesión expiró." };
 
   const supabase = await createClient();
-  const { data: account } = await supabase
-    .from("revolving_accounts")
-    .select("name")
-    .eq("id", id)
-    .maybeSingle();
-
-  const { error } = await supabase
+  const { data: account, error } = await supabase
     .from("revolving_accounts")
     .delete()
-    .eq("id", id);
-  if (error) return { ok: false, error: error.message };
+    .eq("id", id)
+    .select("name")
+    .maybeSingle();
+  if (error) return { ok: false, error: publicActionError("card.delete", error) };
+  if (!account) {
+    return { ok: false, error: "No encontramos esa tarjeta o no puedes eliminarla." };
+  }
 
   await supabase.from("activity").insert({
     user_id: user.id,
@@ -234,7 +280,7 @@ export async function deleteRevolvingAccount(
     payment_id: null,
     type: "credit_deleted",
     title: "Tarjeta eliminada",
-    description: account?.name ?? null,
+    description: account.name,
     amount: null,
   });
 
@@ -250,7 +296,7 @@ const movementSchema = z.object({
   accountId: z.string().uuid(),
   kind: z.enum(["charge", "payment", "interest", "fee"]),
   amount: z.number().positive("El importe debe ser mayor que cero."),
-  movementDate: z.string().regex(ISO_DATE, "Elige la fecha."),
+  movementDate: civilDate,
   description: z.string().trim().max(120).optional().nullable(),
   installmentCount: z.number().int().min(1).max(60).default(1),
 });
@@ -267,7 +313,7 @@ const MOVEMENT_LABEL: Record<MovementInput["kind"], string> = {
 /** Registra una compra, un pago, intereses o una cuota de manejo. */
 export async function registerMovement(
   input: MovementInput,
-  receiptData?: FormData,
+  pendingReceipt?: PendingReceipt | null,
 ): Promise<ActionResult<{ balance: number; available: number }>> {
   const parsed = movementSchema.safeParse(input);
   if (!parsed.success) {
@@ -289,7 +335,9 @@ export async function registerMovement(
     .eq("id", value.accountId)
     .maybeSingle();
 
-  if (summaryError) return { ok: false, error: summaryError.message };
+  if (summaryError) {
+    return { ok: false, error: publicActionError("card.movement.load", summaryError) };
+  }
   if (!summary) return { ok: false, error: "No encontramos esa tarjeta." };
 
   const balance = Number(summary.balance);
@@ -316,43 +364,54 @@ export async function registerMovement(
     }
   }
 
-  const receipt = await uploadReceipt(
+  const receipt = await claimUploadedReceipt(
     supabase,
     user.id,
     "cards",
     value.accountId,
-    receiptFile(receiptData),
+    pendingReceipt,
   );
 
-  const { data: movement, error } = await supabase
-    .from("revolving_movements")
-    .insert({
-      account_id: value.accountId,
-      user_id: user.id,
-      kind: value.kind,
-      amount: money(value.amount),
-      movement_date: value.movementDate,
-      description: value.description?.trim() || null,
-      installment_count: value.kind === "charge" ? value.installmentCount : 1,
-      installments_paid: 0,
-      ...(receipt ?? {}),
-    })
-    .select("id")
-    .single();
+  const { data: movementData, error } = await createAdminClient().rpc(
+    "register_revolving_movement",
+    {
+      p_user_id: user.id,
+      p_account_id: value.accountId,
+      p_kind: value.kind,
+      p_amount: money(value.amount),
+      p_movement_date: value.movementDate,
+      p_description: value.description?.trim() || null,
+      p_installment_count: value.installmentCount,
+      p_receipt_path: receipt?.receipt_path ?? null,
+      p_receipt_name: receipt?.receipt_name ?? null,
+      p_receipt_mime: receipt?.receipt_mime ?? null,
+      p_receipt_size: receipt?.receipt_size ?? null,
+    },
+  );
 
-  if (error || !movement) {
+  if (error || !movementData) {
     await removeReceipt(supabase, receipt?.receipt_path);
-    return { ok: false, error: error?.message ?? "No pudimos registrar el movimiento." };
+    const message = error?.message ?? "";
+    return {
+      ok: false,
+      error: message.includes("exceeds balance")
+        ? "El pago supera el saldo usado. Actualiza e inténtalo de nuevo."
+        : message.includes("credit limit")
+          ? "El movimiento supera el cupo disponible."
+          : "No pudimos registrar el movimiento.",
+    };
   }
-
-  const delta = value.kind === "payment" ? -value.amount : value.amount;
-  const newBalance = money(Math.max(0, balance + delta));
+  const movement = movementData as {
+    movement_id: string;
+    balance: number;
+    available: number;
+  };
 
   await supabase.from("activity").insert({
     user_id: user.id,
     credit_id: null,
     payment_id: null,
-    revolving_movement_id: movement.id,
+    revolving_movement_id: movement.movement_id,
     type: value.kind === "payment" ? "payment" : "credit_updated",
     title: `${MOVEMENT_LABEL[value.kind]} · ${summary.name}`,
     description: value.description?.trim() || null,
@@ -371,8 +430,8 @@ export async function registerMovement(
   return {
     ok: true,
     data: {
-      balance: newBalance,
-      available: money(Math.max(0, Number(summary.credit_limit) - newBalance)),
+      balance: Number(movement.balance),
+      available: Number(movement.available),
     },
   };
 }
@@ -387,25 +446,21 @@ export async function registerMovement(
 export async function deleteMovement(
   movementId: string,
 ): Promise<ActionResult> {
+  if (!z.string().uuid().safeParse(movementId).success) {
+    return { ok: false, error: "El movimiento no es válido." };
+  }
   const user = await getCurrentUser();
   if (!user) return { ok: false, error: "Tu sesión expiró." };
 
   const supabase = await createClient();
-  const { data: movement } = await supabase
-    .from("revolving_movements")
-    .select("account_id, receipt_path")
-    .eq("id", movementId)
-    .maybeSingle();
-
-  if (!movement) return { ok: false, error: "No encontramos ese movimiento." };
-
-  const { error } = await supabase
-    .from("revolving_movements")
-    .delete()
-    .eq("id", movementId);
-
-  if (error) return { ok: false, error: error.message };
-
+  const { data, error } = await createAdminClient().rpc(
+    "delete_revolving_movement",
+    { p_user_id: user.id, p_movement_id: movementId },
+  );
+  if (error || !data) {
+    return { ok: false, error: "No encontramos ese movimiento o no puedes eliminarlo." };
+  }
+  const movement = data as { account_id: string; receipt_path: string | null };
   await removeReceipt(supabase, movement.receipt_path);
 
   revalidateRevolving(movement.account_id);
@@ -418,8 +473,8 @@ export async function deleteMovement(
 
 const statementSchema = z.object({
   accountId: z.string().uuid(),
-  statementDate: z.string().regex(ISO_DATE, "Elige la fecha de corte."),
-  dueDate: z.string().regex(ISO_DATE, "Elige la fecha límite de pago."),
+  statementDate: civilDate,
+  dueDate: civilDate,
   totalDue: z.number().min(0),
   minimumDue: z.number().min(0),
   reducedMinimumDue: z.number().min(0).optional().nullable(),
@@ -453,6 +508,15 @@ export async function registerStatement(
       error: "El mínimo no puede ser mayor que el total a pagar.",
     };
   }
+  if (
+    value.reducedMinimumDue != null &&
+    value.reducedMinimumDue > value.totalDue
+  ) {
+    return {
+      ok: false,
+      error: "El mínimo reducido no puede ser mayor que el total a pagar.",
+    };
+  }
 
   const billing = await requireBillingWriteAccess();
   if (!billing.ok) return billing;
@@ -476,7 +540,7 @@ export async function registerStatement(
     { onConflict: "account_id,statement_date" },
   );
 
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: publicActionError("statement.save", error) };
 
   revalidateRevolving(value.accountId);
   return { ok: true, data: undefined };

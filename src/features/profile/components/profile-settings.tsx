@@ -85,7 +85,7 @@ export function ProfileSettings({ profile }: { profile: Profile }) {
           <Row
             icon={Shield}
             label="Administración"
-            hint="Usuarios, roles y créditos"
+            hint="Usuarios, planes y cobros"
             href="/admin"
           />
         )}

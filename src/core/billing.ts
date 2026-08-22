@@ -78,8 +78,8 @@ function entitlement(
  *
  * Una suscripción vencida nunca secuestra la información del cliente: leer y
  * exportar siguen disponibles; sólo las nuevas escrituras pueden limitarse.
- * La aplicación todavía no aplica este bloqueo: esta función deja lista y
- * probada la regla antes de conectarla a productos o precios reales.
+ * Las Server Actions consultan esta regla antes de cualquier escritura; leer
+ * y exportar permanecen disponibles incluso después de vencer el acceso.
  */
 export function resolveBillingEntitlement({
   isAdmin,

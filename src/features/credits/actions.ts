@@ -7,9 +7,9 @@ import { rebuildCreditSchedule } from "@/features/credits/schedule";
 import { requireBillingWriteAccess } from "@/features/billing/access";
 import { creditTypeLabel } from "@/shared/lib/constants";
 import { formatMoney } from "@/shared/lib/format";
+import { isCalendarDate } from "@/shared/lib/dates";
 import type { ActionResult } from "@/shared/types/domain";
-
-const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+import { publicActionError } from "@/shared/lib/server-errors";
 
 const creditSchema = z.object({
   name: z.string().trim().min(1, "Ponle un nombre al crédito.").max(80),
@@ -38,8 +38,15 @@ const creditSchema = z.object({
   extraPrincipalMode: z
     .enum(["reduce_term", "reduce_installment"])
     .default("reduce_term"),
-  firstPaymentDate: z.string().regex(ISO_DATE, "Elige la fecha de la primera cuota."),
-  currency: z.string().trim().length(3).default("COP"),
+  firstPaymentDate: z
+    .string()
+    .refine(isCalendarDate, "Elige una fecha válida para la primera cuota."),
+  currency: z
+    .string()
+    .trim()
+    .regex(/^[A-Za-z]{3}$/, "La moneda debe tener tres letras.")
+    .transform((value) => value.toUpperCase())
+    .default("COP"),
   notes: z.string().trim().max(500).optional().nullable(),
 });
 
@@ -89,7 +96,14 @@ export async function createCredit(
     .single();
 
   if (error || !credit) {
-    return { ok: false, error: error?.message ?? "No pudimos crear el crédito." };
+    return {
+      ok: false,
+      error: publicActionError(
+        "credit.create",
+        error,
+        "No pudimos crear el crédito.",
+      ),
+    };
   }
 
   // Sin pagos todavía, la reconstrucción produce exactamente el plan original.
@@ -103,10 +117,11 @@ export async function createCredit(
     await supabase.from("credits").delete().eq("id", credit.id);
     return {
       ok: false,
-      error:
-        e instanceof Error
-          ? `No pudimos generar el plan de pagos: ${e.message}`
-          : "No pudimos generar el plan de pagos.",
+      error: publicActionError(
+        "credit.schedule.create",
+        e,
+        "No pudimos generar el plan de pagos.",
+      ),
     };
   }
 
@@ -178,7 +193,7 @@ export async function updateCredit(
   if (!user) return { ok: false, error: "Tu sesión expiró." };
 
   const supabase = await createClient();
-  const { error } = await supabase
+  const { data: updated, error } = await supabase
     .from("credits")
     .update({
       name: value.name,
@@ -188,9 +203,14 @@ export async function updateCredit(
       color: value.color,
       icon: value.icon ?? null,
     })
-    .eq("id", value.id);
+    .eq("id", value.id)
+    .select("id")
+    .maybeSingle();
 
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: publicActionError("credit.update", error) };
+  if (!updated) {
+    return { ok: false, error: "No encontramos ese crédito o no puedes editarlo." };
+  }
 
   await supabase.from("activity").insert({
     user_id: user.id,
@@ -211,18 +231,23 @@ export async function updateCredit(
 
 /** Borra el crédito con su plan, sus pagos y su actividad (cascada en la BD). */
 export async function deleteCredit(id: string): Promise<ActionResult> {
+  if (!z.string().uuid().safeParse(id).success) {
+    return { ok: false, error: "El crédito no es válido." };
+  }
   const user = await getCurrentUser();
   if (!user) return { ok: false, error: "Tu sesión expiró." };
 
   const supabase = await createClient();
-  const { data: credit } = await supabase
+  const { data: credit, error } = await supabase
     .from("credits")
-    .select("name")
+    .delete()
     .eq("id", id)
+    .select("name")
     .maybeSingle();
-
-  const { error } = await supabase.from("credits").delete().eq("id", id);
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: publicActionError("credit.delete", error) };
+  if (!credit) {
+    return { ok: false, error: "No encontramos ese crédito o no puedes eliminarlo." };
+  }
 
   // La actividad del crédito se va en cascada; esta entrada queda suelta
   // (credit_id nulo) para que el borrado deje rastro.
@@ -232,7 +257,7 @@ export async function deleteCredit(id: string): Promise<ActionResult> {
     payment_id: null,
     type: "credit_deleted",
     title: "Crédito eliminado",
-    description: credit?.name ?? null,
+    description: credit.name,
     amount: null,
   });
 

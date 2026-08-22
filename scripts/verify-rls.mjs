@@ -169,8 +169,8 @@ try {
       `devolvió ${members?.length ?? 0} filas`,
     );
 
-    // El cronograma lo escribe la acción del servidor, no la base: aquí se
-    // inserta a mano como Ana para poder comprobar que Beto lo lee.
+    // El navegador sólo lee el cronograma; la acción lo reemplaza mediante un
+    // RPC service_role transaccional.
     const { error: scheduleWriteError } = await asAna
       .from("credit_schedule")
       .insert({
@@ -183,8 +183,22 @@ try {
         principal_amount: 78_849,
         closing_balance: 921_151,
       });
-    check("Ana puede escribir el plan de su crédito", !scheduleWriteError,
-      scheduleWriteError?.message);
+    check("Ana NO puede reescribir el plan desde el navegador", Boolean(scheduleWriteError));
+
+    const { error: setupScheduleError } = await admin
+      .from("credit_schedule")
+      .insert({
+        credit_id: shared,
+        installment_number: 1,
+        due_date: "2026-01-01",
+        opening_balance: 1_000_000,
+        payment_amount: 88_849,
+        interest_amount: 10_000,
+        principal_amount: 78_849,
+        closing_balance: 921_151,
+      });
+    check("El servidor puede materializar el plan", !setupScheduleError,
+      setupScheduleError?.message);
 
     const { data: schedule } = await asBeto
       .from("credit_schedule")
@@ -207,7 +221,7 @@ try {
       payment_date: "2026-01-01",
       amount_paid: 50_000,
     });
-    check("Beto puede registrar un pago en el compartido", !payError, payError?.message);
+    check("Beto NO puede saltarse la acción segura de pagos", Boolean(payError));
 
     const sharedReceiptPath = `${ana.id}/credits/${shared}/shared-rls.png`;
     const privateReceiptPath = `${ana.id}/credits/${anaPrivate}/private-rls.png`;
@@ -221,7 +235,7 @@ try {
       if (!uploadError) storagePaths.push(path);
     }
 
-    const { error: sharedReceiptPaymentError } = await asAna.from("payments").insert({
+    const { error: sharedReceiptPaymentError } = await admin.from("payments").insert({
       credit_id: shared,
       user_id: ana.id,
       payment_date: "2026-02-01",
@@ -231,7 +245,7 @@ try {
       receipt_mime: "image/png",
       receipt_size: fakePng.byteLength,
     });
-    const { error: privateReceiptPaymentError } = await asAna.from("payments").insert({
+    const { error: privateReceiptPaymentError } = await admin.from("payments").insert({
       credit_id: anaPrivate,
       user_id: ana.id,
       payment_date: "2026-02-01",
@@ -298,6 +312,93 @@ try {
   {
     const { data } = await asBeto.from("revolving_accounts").select("id");
     check("Beto NO ve la tarjeta de Ana", (data ?? []).length === 0);
+
+    const { error: directMovementError } = await asAna
+      .from("revolving_movements")
+      .insert({
+        account_id: card.id,
+        user_id: ana.id,
+        kind: "charge",
+        amount: 1_000,
+      });
+    check(
+      "Ana NO puede manipular el saldo rotativo desde el navegador",
+      Boolean(directMovementError),
+    );
+
+    const { error: atomicMovementRpcError } = await asAna.rpc(
+      "register_revolving_movement",
+      {
+        p_user_id: ana.id,
+        p_account_id: card.id,
+        p_kind: "charge",
+        p_amount: 1_000,
+        p_movement_date: "2026-01-01",
+        p_description: null,
+        p_installment_count: 1,
+        p_receipt_path: null,
+        p_receipt_name: null,
+        p_receipt_mime: null,
+        p_receipt_size: null,
+      },
+    );
+    check("El RPC atómico de tarjetas es sólo del servidor", Boolean(atomicMovementRpcError));
+
+    const { error: statementSetupError } = await admin
+      .from("revolving_statements")
+      .insert({
+        account_id: card.id,
+        statement_date: "2026-01-01",
+        due_date: "2026-01-20",
+        total_due: 500,
+        minimum_due: 100,
+      });
+    const { data: chargeResult, error: chargeError } = await admin.rpc(
+      "register_revolving_movement",
+      {
+        p_user_id: ana.id, p_account_id: card.id, p_kind: "charge",
+        p_amount: 500, p_movement_date: "2026-01-02", p_description: "Prueba",
+        p_installment_count: 1, p_receipt_path: null, p_receipt_name: null,
+        p_receipt_mime: null, p_receipt_size: null,
+      },
+    );
+    const { data: paymentResult, error: cardPaymentError } = await admin.rpc(
+      "register_revolving_movement",
+      {
+        p_user_id: ana.id, p_account_id: card.id, p_kind: "payment",
+        p_amount: 200, p_movement_date: "2026-01-03", p_description: "Pago",
+        p_installment_count: 1, p_receipt_path: null, p_receipt_name: null,
+        p_receipt_mime: null, p_receipt_size: null,
+      },
+    );
+    const { data: paidStatement } = await admin
+      .from("revolving_statements")
+      .select("paid_amount")
+      .eq("account_id", card.id)
+      .single();
+    check(
+      "El servidor actualiza saldo y extracto en una transacción",
+      !statementSetupError && !chargeError && !cardPaymentError &&
+        Number(chargeResult?.balance) === 500 &&
+        Number(paymentResult?.balance) === 300 &&
+        Number(paidStatement?.paid_amount) === 200,
+      statementSetupError?.message ?? chargeError?.message ?? cardPaymentError?.message,
+    );
+
+    const { error: atomicDeleteError } = await admin.rpc(
+      "delete_revolving_movement",
+      { p_user_id: ana.id, p_movement_id: paymentResult?.movement_id },
+    );
+    const { data: restoredStatement } = await admin
+      .from("revolving_statements")
+      .select("paid_amount")
+      .eq("account_id", card.id)
+      .single();
+    check(
+      "Eliminar el pago revierte también el extracto",
+      !atomicDeleteError && Number(restoredStatement?.paid_amount) === 0,
+      atomicDeleteError?.message,
+    );
   }
 
   console.log("\nPresupuesto mensual");
@@ -467,8 +568,72 @@ try {
       payment_date: "2026-03-01",
       amount_paid: 2_000,
     });
-    check("Beto registra un movimiento privado", !betoPaymentError,
-      betoPaymentError?.message);
+    check("Beto NO puede registrar pagos fuera de la acción segura", Boolean(betoPaymentError));
+
+    const { data: serverPayment, error: serverPaymentError } = await admin
+      .from("payments")
+      .insert({
+        credit_id: betoPrivate,
+        user_id: beto.id,
+        payment_date: "2026-03-01",
+        amount_paid: 2_000,
+      })
+      .select("id")
+      .single();
+    check("El servidor registra el movimiento autorizado", !serverPaymentError,
+      serverPaymentError?.message);
+
+    const { error: serverReplayError } = await admin.rpc("replace_credit_replay", {
+      p_credit_id: betoPrivate,
+      p_expected_history: [{
+        id: serverPayment?.id,
+        payment_date: "2026-03-01",
+        amount_paid: 2_000,
+        extra_principal: 0,
+      }],
+      p_schedule: [
+        {
+          installment_number: 1, due_date: "2026-01-01",
+          opening_balance: 1_000_000, payment_amount: 2_000,
+          interest_amount: 0, principal_amount: 2_000, closing_balance: 998_000,
+          extra_principal_before: 0, paid_amount: 2_000, status: "paid",
+          paid_at: new Date().toISOString(),
+        },
+        {
+          installment_number: 2, due_date: "2026-02-01",
+          opening_balance: 998_000, payment_amount: 90_000,
+          interest_amount: 9_980, principal_amount: 80_020, closing_balance: 917_980,
+          extra_principal_before: 0, paid_amount: 0, status: "pending", paid_at: null,
+        },
+      ],
+      p_allocations: [{
+        id: serverPayment?.id, installment_number: 1, amount_paid: 2_000,
+        principal_paid: 2_000, interest_paid: 0, extra_principal: 0,
+        balance_after: 998_000,
+      }],
+      p_next_status: "active",
+    });
+    const { data: replayedPayment } = await asBeto
+      .from("payments")
+      .select("installment_number,principal_paid,balance_after")
+      .eq("id", serverPayment?.id)
+      .single();
+    check(
+      "El servidor reemplaza plan e imputaciones de forma atómica",
+      !serverReplayError && replayedPayment?.installment_number === 1 &&
+        Number(replayedPayment?.principal_paid) === 2_000 &&
+        Number(replayedPayment?.balance_after) === 998_000,
+      serverReplayError?.message,
+    );
+
+    const { error: replayRpcError } = await asBeto.rpc("replace_credit_replay", {
+      p_credit_id: betoPrivate,
+      p_expected_history: [],
+      p_schedule: [],
+      p_allocations: [],
+      p_next_status: "paid",
+    });
+    check("El RPC de reconstrucción es sólo del servidor", Boolean(replayRpcError));
 
     const { data: hiddenPayment } = await asAna
       .from("payments")
@@ -517,6 +682,41 @@ try {
       "Cada cuenta nueva recibe automáticamente 5 días de prueba",
       automaticTrial?.status === "trialing" && Boolean(automaticTrial.trial_ends_at),
     );
+
+    const { error: expireError } = await admin
+      .from("saas_subscriptions")
+      .update({ status: "expired" })
+      .eq("user_id", beto.id);
+    const { error: expiredCreditBypass } = await asBeto.from("credits").insert({
+      owner_id: beto.id,
+      name: "Intento con plan vencido",
+      type: "other",
+      principal_amount: 100_000,
+      interest_rate_monthly: 0,
+      term_months: 1,
+      amortization_system: "no_interest",
+      first_payment_date: "2026-04-01",
+    });
+    const { error: expiredBudgetBypass } = await asBeto.rpc(
+      "save_monthly_budget_v2",
+      {
+        p_month: "2026-09-01",
+        p_currency: "COP",
+        p_incomes: [],
+        p_expenses: [],
+      },
+    );
+    check(
+      "El plan vencido tampoco puede saltarse el bloqueo por PostgREST",
+      !expireError && Boolean(expiredCreditBypass) && Boolean(expiredBudgetBypass),
+      expireError?.message,
+    );
+    const { error: restoreTrialError } = await admin
+      .from("saas_subscriptions")
+      .update({ status: "trialing" })
+      .eq("user_id", beto.id);
+    check("Restaurar la prueba de verificación", !restoreTrialError,
+      restoreTrialError?.message);
 
     const { data: billingContext, error: billingContextError } = await asBeto.rpc(
       "current_billing_context",

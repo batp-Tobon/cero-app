@@ -2,10 +2,9 @@ import "server-only";
 
 import { cache } from "react";
 import { createClient } from "@/infrastructure/supabase/server";
-import { addMonths, todayISO } from "@/shared/lib/dates";
+import { todayISO } from "@/shared/lib/dates";
 import type {
   CreditSummary,
-  DebtOverview,
   Installment,
   InstallmentState,
   UpcomingItem,
@@ -21,7 +20,6 @@ import type {
   RevolvingSummaryRow,
   ScheduleRowDB,
 } from "@/shared/types/database";
-import { env } from "@/shared/lib/env";
 import { signReceiptPaths } from "@/features/receipts/server";
 
 /** Lo que queda por pagar del extracto vigente de una tarjeta. */
@@ -56,66 +54,6 @@ export async function getCreditSummaries(): Promise<CreditSummary[]> {
 
   if (error) throw new Error(error.message);
   return data ?? [];
-}
-
-/**
- * Cabecera del inicio. Se calcula sobre los resúmenes ya cargados para no
- * disparar una segunda consulta por cada cifra de la pantalla.
- */
-export function buildOverview(
-  summaries: CreditSummary[],
-  revolving: RevolvingSummaryRow[] = [],
-): DebtOverview {
-  const active = summaries.filter((c) => c.status === "active");
-
-  const creditDebt = active.reduce((s, c) => s + Number(c.balance), 0);
-  const revolvingDebt = revolving
-    .filter((r) => r.status === "active")
-    .reduce((s, r) => s + Number(r.balance), 0);
-  const totalPrincipal = active.reduce(
-    (s, c) => s + Number(c.principal_amount),
-    0,
-  );
-  const totalPrincipalPaid = active.reduce(
-    (s, c) => s + Number(c.total_principal_paid),
-    0,
-  );
-  const activeCards = revolving.filter((r) => r.status === "active");
-  const monthlyCommitment =
-    active.reduce((s, c) => s + Number(c.next_payment_amount ?? 0), 0) +
-    activeCards.reduce((s, r) => s + pendingStatement(r), 0);
-  const overdueCount = active.reduce((s, c) => s + Number(c.overdue_count), 0);
-
-  // Cuándo se paga la última cuota del portafolio. El plan es mensual, así que
-  // basta con desplazar la próxima cuota tantos meses como queden por pagar.
-  const freeDate = active.reduce<string | null>((latest, c) => {
-    if (!c.next_due_date) return latest;
-    const remaining = Math.max(
-      0,
-      Number(c.total_installments) - Number(c.paid_installments) - 1,
-    );
-    const last = addMonths(c.next_due_date, remaining);
-    return latest == null || last > latest ? last : latest;
-  }, null);
-
-  return {
-    totalDebt: creditDebt + revolvingDebt,
-    creditDebt,
-    revolvingDebt,
-    totalPrincipal,
-    totalPrincipalPaid,
-    progressPercent: totalPrincipal
-      ? (totalPrincipalPaid / totalPrincipal) * 100
-      : 0,
-    monthlyCommitment,
-    installmentsDue:
-      active.filter((c) => c.next_installment_number != null).length +
-      activeCards.filter((r) => pendingStatement(r) > 0).length,
-    freeDate,
-    overdueCount,
-    activeCredits: active.length,
-    currency: active[0]?.currency ?? env.defaultCurrency,
-  };
 }
 
 /**

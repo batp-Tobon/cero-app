@@ -42,6 +42,7 @@ npm run dev
 | `NEXT_PUBLIC_APP_TZ`            | Zona horaria de vencimientos                  |
 | `NEXT_PUBLIC_DEFAULT_CURRENCY`  | Moneda por defecto                            |
 | `NEXT_PUBLIC_PAYMENT_KEY`       | Llave Bre-B visible para los clientes         |
+| `NEXT_PUBLIC_SUPPORT_WHATSAPP`  | WhatsApp de soporte, con indicativo de país    |
 | `NEXT_PUBLIC_WOMPI_PUBLIC_KEY`  | Llave pública del comercio Wompi              |
 | `WOMPI_INTEGRITY_SECRET`        | Firma del checkout, sólo servidor             |
 | `WOMPI_EVENTS_SECRET`           | Verificación del webhook, sólo servidor       |
@@ -147,22 +148,24 @@ suyo aparte. El dueño invita y es el único que puede borrar el crédito.
 conocido, así que vive en `revolving_accounts` con su cupo, sus movimientos y
 sus extractos, en vez de forzarse dentro del motor de amortización.
 
-**La sesión se verifica sin salir a la red.** El middleware llama a
-`auth.getUser()` una vez por request — es la comprobación autoritativa, refresca
-el token y detecta una sesión revocada. Las páginas usan `auth.getClaims()`, que
-valida la firma del JWT en local (0,4 ms frente a 214 ms). Repetir la llamada de
-red en cada pantalla costaba casi medio segundo por carga.
+**La sesión se verifica sin salir a la red.** El middleware y las páginas usan
+`auth.getClaims()`, que valida firma y expiración del JWT con las claves JWKS
+cacheadas. No se repite `auth.getUser()` por red en cada navegación. Las rutas
+públicas y webhooks ni siquiera inicializan Auth.
 
 **Los cálculos ocurren en el servidor.** El navegador puede *previsualizar* una
 cuota (con el mismo módulo, para que el número no cambie al confirmar), pero
-sólo las Server Actions escriben.
+las escrituras financieras se autorizan en Server Actions y se confirman con
+RPC transaccionales de uso exclusivo del servidor.
 
 **El orden lo pone la fecha, no el formulario.** El número de cuota que salda un
 pago lo asigna la reconstrucción por orden cronológico. Registrar un pago con
 fecha atrasada lo coloca donde de verdad ocurrió.
 
 **Las RLS no son opcional.** Cada tabla filtra por `auth.uid()` en Postgres. El
-filtro del frontend es comodidad, no seguridad.
+filtro del frontend es comodidad, no seguridad. Una suscripción vencida tampoco
+puede eludir el bloqueo comercial llamando a PostgREST: conserva lectura,
+exportación y borrado de sus datos, pero no puede crear ni modificar registros.
 
 **Administrar no significa espiar.** El backoffice sólo alcanza perfiles,
 roles, planes, suscripciones, cobros SaaS y auditoría. Ni siquiera un
@@ -172,8 +175,7 @@ registra dentro de la misma transacción.
 
 ### Motor de amortización
 
-`src/core/domain/amortization.ts` — módulo puro, sin dependencias de red ni de
-React, con 52 tests.
+`src/core/amortization.ts` — módulo puro, sin dependencias de red ni de React.
 
 - **Francés** · cuota fija
 - **Alemán** · capital fijo, cuota decreciente
@@ -191,14 +193,28 @@ cuota menor).
 
 ## Despliegue en Vercel
 
-1. Sube el repositorio a GitHub.
-2. En Vercel: **New Project** → importa el repositorio (framework Next.js,
-   detectado solo).
-3. Añade las variables `NEXT_PUBLIC_*` en *Settings → Environment Variables*
-   (Production y Preview). **No añadas la service role key.**
-4. En Supabase, *Authentication → URL Configuration*: pon el dominio de Vercel
-   como **Site URL** y añade `https://<dominio>/auth/callback` a las
-   **Redirect URLs**.
+1. Fusiona la rama verificada en `main` y, en el equipo correcto de Vercel,
+   selecciona **Add New → Project → Import Git Repository → `batp-Tobon/cero-app`**.
+2. Conserva **Framework Preset: Next.js**, **Root Directory: `./`** y los
+   comandos detectados. `vercel.json` ubica las Functions en São Paulo (`gru1`),
+   junto a la base Supabase `sa-east-1`.
+3. En **Settings → Environment Variables**, carga para **Production** todas las
+   variables de `.env.example`. `NEXT_PUBLIC_APP_URL` debe ser la URL HTTPS
+   definitiva. Marca como sensibles `SUPABASE_SERVICE_ROLE_KEY`,
+   `WOMPI_INTEGRITY_SECRET` y `WOMPI_EVENTS_SECRET`. La service role es
+   **obligatoria**, sólo del servidor y nunca debe llevar `NEXT_PUBLIC_`.
+4. Para Preview usa un proyecto Supabase y llaves Wompi de pruebas separados;
+   no conectes ramas no revisadas a la base ni a los secretos de producción.
+5. En Supabase, **Authentication → URL Configuration**: configura la URL de
+   producción como **Site URL** y añade
+   `https://<dominio>/auth/callback` a **Redirect URLs**.
+6. En Wompi configura el evento de producción en
+   `https://<dominio>/api/payments/wompi/webhook`, copia los tres valores de
+   producción a Vercel y realiza un cobro real pequeño antes de abrir ventas.
+7. Pulsa **Deploy**. Si cambias cualquier variable después, vuelve a desplegar:
+   Vercel no la aplica retroactivamente a despliegues existentes.
+8. Comprueba registro, los 5 días de prueba, pago Wompi, comprobante Bre-B,
+   aprobación administrativa, creación de crédito/tarjeta y exportación CSV.
 
 Cada push a `main` despliega a producción; cada PR genera un preview.
 
@@ -226,11 +242,12 @@ npm run verify:rls
 
 Necesita `SUPABASE_SERVICE_ROLE_KEY` en `.env.local`.
 
-77 tests sobre el dominio: la cuota francesa, los cuatro sistemas, el encadenado
+99 tests automatizados cubren: la cuota francesa, los cuatro sistemas, el encadenado
 de saldos, el redondeo con centavos, el salto de meses cortos (31 ene → 28 feb),
 el reparto entre interés y capital, el recálculo tras un abono en sus dos modos
 y la reconstrucción del plan desde el historial — incluido borrar un pago
 intermedio y comprobar que los seis siguientes se renumeran sin descuadrar—,
 más el cálculo mensual de ingresos, gastos, pagos y déficit, las recomendaciones
 financieras, la firma real de comprobantes y las reglas de acceso para planes,
-pruebas, suscripciones, gracia y cancelación.
+pruebas, suscripciones, gracia y cancelación. `verify:rls` añade pruebas contra
+la base real para aislamiento, permisos y escrituras financieras atómicas.

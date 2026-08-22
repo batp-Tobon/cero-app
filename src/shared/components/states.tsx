@@ -46,8 +46,8 @@ export function EmptyState({
 }
 
 /**
- * Estado de error. Muestra qué pasó de verdad — ocultar el fallo detrás de
- * "algo salió mal" deja al usuario sin nada que hacer.
+ * Estado de error. Los detalles técnicos sólo aparecen en desarrollo: una
+ * respuesta de Postgres puede revelar nombres de tablas o restricciones.
  */
 export function ErrorState({
   title = "No pudimos cargar la información",
@@ -58,6 +58,8 @@ export function ErrorState({
   detail?: string;
   className?: string;
 }) {
+  const visibleDetail = process.env.NODE_ENV !== "production" ? detail : undefined;
+
   return (
     <div
       role="alert"
@@ -70,9 +72,13 @@ export function ErrorState({
         <AlertTriangle className="h-6 w-6 text-destructive" aria-hidden />
       </span>
       <h3 className="mt-5 text-base font-semibold">{title}</h3>
-      {detail && (
+      {visibleDetail ? (
         <p className="mt-2 max-w-[38ch] text-sm leading-relaxed text-muted-foreground">
-          {detail}
+          {visibleDetail}
+        </p>
+      ) : (
+        <p className="mt-2 max-w-[38ch] text-sm leading-relaxed text-muted-foreground">
+          Revisa tu conexión e inténtalo nuevamente.
         </p>
       )}
     </div>

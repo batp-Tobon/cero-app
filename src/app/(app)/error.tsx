@@ -4,10 +4,7 @@ import { useEffect } from "react";
 import { AlertTriangle, RotateCcw } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 
-/**
- * Frontera de error de las pantallas privadas. Se muestra el mensaje real:
- * un "algo salió mal" genérico deja al usuario sin saber si reintentar.
- */
+/** Frontera segura: el detalle real queda en logs y el digest permite rastrearlo. */
 export default function AppError({
   error,
   reset,
@@ -30,7 +27,7 @@ export default function AppError({
 
       <h1 className="mt-5 text-base font-semibold">Algo falló al cargar</h1>
       <p className="mt-2 max-w-[38ch] text-sm leading-relaxed text-muted-foreground">
-        {error.message || "No pudimos completar la operación."}
+        No pudimos completar la operación. Revisa tu conexión y vuelve a intentarlo.
       </p>
       {error.digest && (
         <p className="mt-2 text-xs text-muted-foreground/70">

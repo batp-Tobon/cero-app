@@ -1,4 +1,4 @@
-import withPWAInit from "@ducanh2912/next-pwa";
+import withPWAInit, { runtimeCaching } from "@ducanh2912/next-pwa";
 
 const isDevelopment = process.env.NODE_ENV === "development";
 const contentSecurityPolicy = [
@@ -27,15 +27,52 @@ const securityHeaders = [
   { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains; preload" },
 ];
 
+const safeStaticCaches = new Set([
+  "google-fonts-webfonts",
+  "google-fonts-stylesheets",
+  "static-font-assets",
+  "next-static-js-assets",
+  "next-image",
+  "static-js-assets",
+  "static-style-assets",
+]);
+
+// Nunca persiste HTML, RSC, APIs ni respuestas de Supabase: contienen datos
+// financieros privados y deben venir de red con una sesión vigente.
+const privateNetworkOnly = [
+  {
+    urlPattern: ({ request }) =>
+      request.mode === "navigate" || request.headers.get("RSC") === "1",
+    handler: "NetworkOnly",
+    options: { cacheName: "private-navigation" },
+  },
+  {
+    urlPattern: ({ sameOrigin, url }) => sameOrigin && url.pathname.startsWith("/api/"),
+    handler: "NetworkOnly",
+    method: "GET",
+    options: { cacheName: "private-api" },
+  },
+];
+
 const withPWA = withPWAInit({
   dest: "public",
-  cacheOnFrontEndNav: true,
-  aggressiveFrontEndNavCaching: true,
+  cacheOnFrontEndNav: false,
+  aggressiveFrontEndNavCaching: false,
+  cacheStartUrl: false,
+  dynamicStartUrl: false,
   reloadOnOnline: true,
   disable: process.env.NODE_ENV === "development",
   register: true,
   fallbacks: { document: "/offline" },
-  workboxOptions: { disableDevLogs: true },
+  workboxOptions: {
+    disableDevLogs: true,
+    runtimeCaching: [
+      ...privateNetworkOnly,
+      ...runtimeCaching.filter((entry) =>
+        safeStaticCaches.has(entry.options?.cacheName ?? ""),
+      ),
+    ],
+  },
 });
 
 /** @type {import('next').NextConfig} */

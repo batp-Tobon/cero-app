@@ -24,6 +24,10 @@ import { Label } from "@/shared/ui/label";
 import { AmountField } from "@/shared/components/amount-field";
 import { InlineNotice } from "@/shared/components/states";
 import { ReceiptField } from "@/features/receipts/components/receipt-field";
+import {
+  discardPendingReceipt,
+  uploadReceiptFromForm,
+} from "@/features/receipts/client";
 import { deletePayment, updatePayment } from "@/features/payments/actions";
 import { formatMoney } from "@/shared/lib/format";
 import { formatShortDate, todayISO } from "@/shared/lib/dates";
@@ -172,28 +176,44 @@ function EditPaymentSheet({
 
   async function onSave(e: React.FormEvent) {
     e.preventDefault();
-    const receiptData = new FormData(e.currentTarget as HTMLFormElement);
+    const form = e.currentTarget as HTMLFormElement;
     setError(null);
     setPending(true);
 
-    const result = await updatePayment({
-      paymentId: payment.id,
-      paymentDate: date,
-      amountPaid: amount,
-      extraPrincipal: extra,
-    }, receiptData);
-    setPending(false);
+    let receipt = null;
+    try {
+      receipt = await uploadReceiptFromForm(form, "credits", payment.credit_id);
+      const result = await updatePayment(
+        {
+          paymentId: payment.id,
+          paymentDate: date,
+          amountPaid: amount,
+          extraPrincipal: extra,
+        },
+        receipt,
+      );
 
-    if (!result.ok) {
-      setError(result.error);
-      return;
+      if (!result.ok) {
+        await discardPendingReceipt(receipt);
+        setError(result.error);
+        return;
+      }
+
+      toast.success("Movimiento corregido", {
+        description: `Nuevo saldo: ${formatMoney(result.data.balance, currency)}`,
+      });
+      onOpenChange(false);
+      router.refresh();
+    } catch (uploadError) {
+      await discardPendingReceipt(receipt);
+      setError(
+        uploadError instanceof Error
+          ? uploadError.message
+          : "No pudimos subir el comprobante.",
+      );
+    } finally {
+      setPending(false);
     }
-
-    toast.success("Movimiento corregido", {
-      description: `Nuevo saldo: ${formatMoney(result.data.balance, currency)}`,
-    });
-    onOpenChange(false);
-    router.refresh();
   }
 
   async function onDelete() {

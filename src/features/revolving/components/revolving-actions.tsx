@@ -18,9 +18,13 @@ import { AmountField } from "@/shared/components/amount-field";
 import { OptionGrid } from "@/shared/components/option-grid";
 import { InlineNotice } from "@/shared/components/states";
 import { ReceiptField } from "@/features/receipts/components/receipt-field";
+import {
+  discardPendingReceipt,
+  uploadReceiptFromForm,
+} from "@/features/receipts/client";
 import { registerMovement, registerStatement } from "@/features/revolving/actions";
 import { formatMoney } from "@/shared/lib/format";
-import { todayISO } from "@/shared/lib/dates";
+import { dateForDayOfMonth, todayISO } from "@/shared/lib/dates";
 import type { MovementInput } from "@/features/revolving/actions";
 
 type MovementKind = MovementInput["kind"];
@@ -80,30 +84,46 @@ export function MovementButton({
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-    const receiptData = new FormData(e.currentTarget as HTMLFormElement);
+    const form = e.currentTarget as HTMLFormElement;
     setError(null);
     setPending(true);
 
-    const result = await registerMovement({
-      accountId,
-      kind,
-      amount,
-      movementDate: date,
-      description,
-      installmentCount,
-    }, receiptData);
-    setPending(false);
+    let receipt = null;
+    try {
+      receipt = await uploadReceiptFromForm(form, "cards", accountId);
+      const result = await registerMovement(
+        {
+          accountId,
+          kind,
+          amount,
+          movementDate: date,
+          description,
+          installmentCount,
+        },
+        receipt,
+      );
 
-    if (!result.ok) {
-      setError(result.error);
-      return;
+      if (!result.ok) {
+        await discardPendingReceipt(receipt);
+        setError(result.error);
+        return;
+      }
+
+      toast.success("Movimiento registrado", {
+        description: `Saldo: ${formatMoney(result.data.balance, currency)}`,
+      });
+      setOpen(false);
+      router.refresh();
+    } catch (uploadError) {
+      await discardPendingReceipt(receipt);
+      setError(
+        uploadError instanceof Error
+          ? uploadError.message
+          : "No pudimos subir el comprobante.",
+      );
+    } finally {
+      setPending(false);
     }
-
-    toast.success("Movimiento registrado", {
-      description: `Saldo: ${formatMoney(result.data.balance, currency)}`,
-    });
-    setOpen(false);
-    router.refresh();
   }
 
   return (
@@ -266,10 +286,10 @@ export function StatementButton({
     setReducedDue(0);
     // Se proponen las fechas del ciclo configurado; siempre editables.
     const { year, month } = splitToday();
-    setStatementDate(`${year}-${pad(month)}-${pad(statementDay)}`);
+    setStatementDate(dateForDayOfMonth(year, month, statementDay));
     const dueMonth = month === 12 ? 1 : month + 1;
     const dueYear = month === 12 ? year + 1 : year;
-    setDueDate(`${dueYear}-${pad(dueMonth)}-${pad(dueDay)}`);
+    setDueDate(dateForDayOfMonth(dueYear, dueMonth, dueDay));
     setOpen(true);
   }
 
@@ -391,10 +411,6 @@ export function StatementButton({
       </Sheet>
     </>
   );
-}
-
-function pad(n: number): string {
-  return String(n).padStart(2, "0");
 }
 
 function splitToday(): { year: number; month: number } {

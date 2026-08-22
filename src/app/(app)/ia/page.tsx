@@ -3,12 +3,10 @@ import Link from "next/link";
 import { BrainCircuit, LockKeyhole, ShieldCheck } from "lucide-react";
 import { calculateBudget } from "@/core/budget";
 import { buildFinancialInsights } from "@/core/financial-insights";
+import { buildOverview } from "@/core/portfolio";
 import { getCurrentBillingEntitlement } from "@/features/billing/queries";
 import { getBudgetSnapshot } from "@/features/budget/queries";
-import {
-  buildOverview,
-  getCreditSummaries,
-} from "@/features/credits/queries";
+import { getCreditSummaries } from "@/features/credits/queries";
 import { getRevolvingSummaries } from "@/features/revolving/queries";
 import { planAllows } from "@/core/billing";
 import { PageHeader } from "@/shared/components/page-header";

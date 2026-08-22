@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/infrastructure/supabase/server";
+import { safeInternalPath } from "@/shared/lib/navigation";
 
 /**
  * Canjea el `code` de Supabase Auth por una sesión. Lo usan la confirmación
@@ -8,10 +9,7 @@ import { createClient } from "@/infrastructure/supabase/server";
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get("code");
-  const requestedNext = searchParams.get("next") ?? "/inicio";
-  const next = requestedNext.startsWith("/") && !requestedNext.startsWith("//")
-    ? requestedNext
-    : "/inicio";
+  const next = safeInternalPath(searchParams.get("next"));
 
   if (code) {
     const supabase = await createClient();

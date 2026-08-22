@@ -10,6 +10,7 @@ import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
 import { InlineNotice } from "@/shared/components/states";
 import { isSupabaseConfigured } from "@/shared/lib/env";
+import { safeInternalPath } from "@/shared/lib/navigation";
 
 /** Traduce los errores de Supabase Auth a algo accionable en español. */
 function authErrorMessage(message: string): string {
@@ -28,7 +29,7 @@ function authErrorMessage(message: string): string {
 export function LoginForm() {
   const router = useRouter();
   const params = useSearchParams();
-  const redirectTo = params.get("redirect") ?? "/inicio";
+  const redirectTo = safeInternalPath(params.get("redirect"));
   const expired = params.get("motivo") === "sesion";
 
   const [email, setEmail] = useState("");

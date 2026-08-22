@@ -9,6 +9,7 @@ import {
   type ReplayResult,
 } from "@/core/amortization";
 import { money } from "@/core/money";
+import { createAdminClient } from "@/infrastructure/supabase/admin";
 
 type DB = SupabaseClient<Database>;
 
@@ -34,56 +35,61 @@ export async function rebuildCreditSchedule(
   db: DB,
   credit: CreditRow,
 ): Promise<RebuildResult> {
-  const { data: payments, error: paymentsError } = await db
-    .from("payments")
-    .select("*")
-    .eq("credit_id", credit.id)
-    .order("payment_date", { ascending: true })
-    .order("created_at", { ascending: true });
+  const admin = createAdminClient();
 
-  if (paymentsError) throw new Error(paymentsError.message);
+  // Lectura optimista + commit transaccional. Si otra pestaña modifica el
+  // historial entre ambos pasos, PostgreSQL lo detecta y se recalcula.
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const { data: payments, error: paymentsError } = await db
+      .from("payments")
+      .select("*")
+      .eq("credit_id", credit.id)
+      .order("payment_date", { ascending: true })
+      .order("created_at", { ascending: true })
+      .order("id", { ascending: true });
+    if (paymentsError) throw new Error(paymentsError.message);
 
-  const history = (payments ?? []) as PaymentRow[];
+    const history = (payments ?? []) as PaymentRow[];
+    const replay = replaySchedule({
+      principal: Number(credit.principal_amount),
+      monthlyRate: Number(credit.interest_rate_monthly),
+      termMonths: credit.term_months,
+      system: credit.amortization_system as AmortizationSystem,
+      firstPaymentDate: credit.first_payment_date,
+      mode: credit.extra_principal_mode as ExtraPrincipalMode,
+      events: history.map((payment) => ({
+        id: payment.id,
+        date: payment.payment_date,
+        settlesInstallment: Number(payment.amount_paid) > 0,
+        amountPaid: Number(payment.amount_paid),
+        extraPrincipal: Number(payment.extra_principal),
+      })),
+    });
 
-  const replay = replaySchedule({
-    principal: Number(credit.principal_amount),
-    monthlyRate: Number(credit.interest_rate_monthly),
-    termMonths: credit.term_months,
-    system: credit.amortization_system as AmortizationSystem,
-    firstPaymentDate: credit.first_payment_date,
-    mode: credit.extra_principal_mode as ExtraPrincipalMode,
-    events: history.map((p) => ({
-      id: p.id,
-      date: p.payment_date,
-      // Un movimiento sin cuota asociada es un abono a capital suelto.
-      settlesInstallment: Number(p.amount_paid) > 0,
-      amountPaid: Number(p.amount_paid),
-      extraPrincipal: Number(p.extra_principal),
-    })),
-  });
+    if (replay.rejected.length > 0) {
+      throw new Error(
+        "El cambio dejaría movimientos posteriores fuera del saldo disponible.",
+      );
+    }
 
-  // Momento en que se registró cada pago, para conservar `paid_at`.
-  const registeredAt = new Map(history.map((p) => [p.id, p.created_at]));
+    const registeredAt = new Map(history.map((payment) => [payment.id, payment.created_at]));
+    const paidByInstallment = new Map(
+      replay.allocations
+        .filter((allocation) => allocation.installment != null)
+        .map((allocation) => [allocation.installment as number, allocation]),
+    );
 
-  // --- Plan de pagos -------------------------------------------------------
-  const { error: deleteError } = await db
-    .from("credit_schedule")
-    .delete()
-    .eq("credit_id", credit.id);
-  if (deleteError) throw new Error(deleteError.message);
-
-  const paidByInstallment = new Map(
-    replay.allocations
-      .filter((a) => a.installment != null)
-      .map((a) => [a.installment as number, a]),
-  );
-
-  if (replay.rows.length > 0) {
-    const { error: insertError } = await db.from("credit_schedule").insert(
-      replay.rows.map((row) => {
+    const { error } = await admin.rpc("replace_credit_replay", {
+      p_credit_id: credit.id,
+      p_expected_history: history.map((payment) => ({
+        id: payment.id,
+        payment_date: payment.payment_date,
+        amount_paid: Number(payment.amount_paid),
+        extra_principal: Number(payment.extra_principal),
+      })),
+      p_schedule: replay.rows.map((row) => {
         const allocation = paidByInstallment.get(row.installment);
         return {
-          credit_id: credit.id,
           installment_number: row.installment,
           due_date: row.dueDate,
           opening_balance: money(row.openingBalance),
@@ -93,60 +99,40 @@ export async function rebuildCreditSchedule(
           closing_balance: money(row.closingBalance),
           extra_principal_before: money(row.extraPrincipalBefore),
           paid_amount: money(row.paidAmount),
-          status: row.paid ? ("paid" as const) : ("pending" as const),
+          status: row.paid ? "paid" : "pending",
           paid_at:
             row.paid && allocation?.id
               ? (registeredAt.get(allocation.id) ?? null)
               : null,
         };
       }),
-    );
-    if (insertError) throw new Error(insertError.message);
-  }
-
-  // --- Imputación de cada pago --------------------------------------------
-  // Dos pasadas: al renumerar, un pago puede tomar el número que otro todavía
-  // ocupa. Se vacían primero y se asignan después.
-  if (history.length > 0) {
-    const { error: clearError } = await db
-      .from("payments")
-      .update({ installment_number: null })
-      .eq("credit_id", credit.id);
-    if (clearError) throw new Error(clearError.message);
-  }
-
-  for (const allocation of replay.allocations) {
-    if (!allocation.id) continue;
-    const { error } = await db
-      .from("payments")
-      .update({
+      p_allocations: replay.allocations.map((allocation) => ({
+        id: allocation.id,
         installment_number: allocation.installment,
+        amount_paid: money(allocation.paidAmount),
         principal_paid: money(allocation.principalPaid),
         interest_paid: money(allocation.interestPaid),
         extra_principal: money(allocation.extraPrincipal),
         balance_after: money(allocation.balanceAfter),
-      })
-      .eq("id", allocation.id);
-    if (error) throw new Error(error.message);
+      })),
+      p_next_status: replay.settled ? "paid" : "active",
+    });
+
+    if (!error) {
+      return {
+        balance: money(replay.balance),
+        settled: replay.settled,
+        installmentsLeft: replay.rows.filter((row) => !row.paid).length,
+        installmentsPaid: replay.rows.filter((row) => row.paid).length,
+        rejected: [],
+      };
+    }
+    if (!error.message.includes("history changed") || attempt === 2) {
+      throw new Error(error.message);
+    }
   }
 
-  // --- Estado del crédito --------------------------------------------------
-  const nextStatus = replay.settled ? "paid" : "active";
-  if (credit.status !== nextStatus && credit.status !== "cancelled") {
-    const { error } = await db
-      .from("credits")
-      .update({ status: nextStatus })
-      .eq("id", credit.id);
-    if (error) throw new Error(error.message);
-  }
-
-  return {
-    balance: money(replay.balance),
-    settled: replay.settled,
-    installmentsLeft: replay.rows.filter((r) => !r.paid).length,
-    installmentsPaid: replay.rows.filter((r) => r.paid).length,
-    rejected: replay.rejected,
-  };
+  throw new Error("No pudimos estabilizar el historial del crédito.");
 }
 
 /** Carga un crédito comprobando que el usuario puede verlo (vía RLS). */

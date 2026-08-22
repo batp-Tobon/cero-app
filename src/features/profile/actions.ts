@@ -5,10 +5,15 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { createClient, getCurrentUser } from "@/infrastructure/supabase/server";
 import type { ActionResult } from "@/shared/types/domain";
+import { publicActionError } from "@/shared/lib/server-errors";
 
 const profileSchema = z.object({
   fullName: z.string().trim().min(1, "Escribe tu nombre.").max(80),
-  currency: z.string().trim().length(3),
+  currency: z
+    .string()
+    .trim()
+    .regex(/^[A-Za-z]{3}$/, "La moneda debe tener tres letras.")
+    .transform((value) => value.toUpperCase()),
 });
 
 /** Actualiza los datos del perfil del usuario autenticado. */
@@ -32,7 +37,7 @@ export async function updateProfile(
     })
     .eq("id", user.id);
 
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: publicActionError("profile.update", error) };
 
   revalidatePath("/perfil");
   revalidatePath("/inicio");
@@ -68,7 +73,9 @@ export async function updateNotificationPreferences(
     })
     .eq("id", user.id);
 
-  if (error) return { ok: false, error: error.message };
+  if (error) {
+    return { ok: false, error: publicActionError("profile.notifications", error) };
+  }
 
   revalidatePath("/perfil");
   return { ok: true, data: undefined };

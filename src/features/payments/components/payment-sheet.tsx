@@ -17,6 +17,10 @@ import { Label } from "@/shared/ui/label";
 import { AmountField } from "@/shared/components/amount-field";
 import { InlineNotice } from "@/shared/components/states";
 import { ReceiptField } from "@/features/receipts/components/receipt-field";
+import {
+  discardPendingReceipt,
+  uploadReceiptFromForm,
+} from "@/features/receipts/client";
 import { registerPayment } from "@/features/payments/actions";
 import { allocatePayment } from "@/core/amortization";
 import { formatMoney } from "@/shared/lib/format";
@@ -72,31 +76,46 @@ export function PaymentSheet({
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (pending) return;
-    const receiptData = new FormData(e.currentTarget as HTMLFormElement);
+    const form = e.currentTarget as HTMLFormElement;
     setError(null);
     setPending(true);
 
-    const result = await registerPayment({
-      creditId: target.creditId,
-      paymentDate,
-      amountPaid: amount,
-      extraPrincipal: extra,
-    }, receiptData);
+    let receipt = null;
+    try {
+      receipt = await uploadReceiptFromForm(form, "credits", target.creditId);
+      const result = await registerPayment(
+        {
+          creditId: target.creditId,
+          paymentDate,
+          amountPaid: amount,
+          extraPrincipal: extra,
+        },
+        receipt,
+      );
 
-    if (!result.ok) {
-      setError(result.error);
+      if (!result.ok) {
+        await discardPendingReceipt(receipt);
+        setError(result.error);
+        return;
+      }
+
+      setDone(true);
+      router.refresh();
+
+      if (result.data.creditSettled) {
+        toast.success("Crédito pagado", {
+          description: `${target.creditName} llegó a cero.`,
+        });
+      }
+    } catch (uploadError) {
+      await discardPendingReceipt(receipt);
+      setError(
+        uploadError instanceof Error
+          ? uploadError.message
+          : "No pudimos subir el comprobante.",
+      );
+    } finally {
       setPending(false);
-      return;
-    }
-
-    setDone(true);
-    setPending(false);
-    router.refresh();
-
-    if (result.data.creditSettled) {
-      toast.success("Crédito pagado", {
-        description: `${target.creditName} llegó a cero.`,
-      });
     }
   }
 

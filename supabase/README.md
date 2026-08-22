@@ -33,9 +33,11 @@ SQL Editor → pega cada archivo **en orden** y ejecútalo:
 15. `20260822175836_receipts_trials_and_ai_plans.sql` — comprobantes, prueba e IA
 16. `20260822182500_cover_foreign_key_indexes.sql` — índices de claves foráneas
 17. `20260822183500_document_webhook_client_denial.sql` — webhooks sólo servidor
-18. `20260822200000_saas_checkout_and_fast_billing.sql` — checkout Wompi, Bre-B y lectura comercial rápida
-19. `20260822203000_fast_dashboard_snapshot.sql` — Inicio en una sola lectura RLS
-20. `20260822204500_fast_subscription_snapshot.sql` — Plan y pagos en una sola lectura RLS
+18. `20260822195416_saas_checkout_and_fast_billing.sql` — checkout Wompi, Bre-B y lectura comercial rápida
+19. `20260822200632_fast_dashboard_snapshot.sql` — Inicio en una sola lectura RLS
+20. `20260822201020_fast_subscription_snapshot.sql` — Plan y pagos en una sola lectura RLS
+21. `20260822213000_atomic_financial_writes.sql` — planes, pagos y tarjetas atómicos
+22. `20260822214500_enforce_saas_write_access.sql` — acceso comercial dentro de RLS
 
 Supabase registra cuáles ya se aplicaron. No ejecutes manualmente una migración
 que figure en el historial remoto.
@@ -75,6 +77,10 @@ contradecir al plan de pagos, que es lo que el usuario ve en pantalla.
 El plan entero se vuelve a derivar en cada escritura a partir de los pagos: es
 lo que permite corregir o borrar un movimiento antiguo sin dejar el saldo
 descuadrado. `payments` guarda los hechos; `credit_schedule` es el resultado.
+El RPC privado `replace_credit_replay` bloquea el crédito, comprueba que el
+historial esperado no cambió y reemplaza plan e imputaciones dentro de una sola
+transacción. El navegador no tiene permisos directos de escritura sobre ambas
+tablas.
 
 ### Corregir un movimiento
 
@@ -120,6 +126,11 @@ Tienen `search_path` vacío, comprueban `auth.uid()` y sólo se ejecutan desde
 políticas o wrappers públicos `security invoker` explícitamente autorizados.
 
 El rol `anon` no tiene ningún permiso sobre estas tablas.
+
+El permiso comercial también vive en Postgres: una prueba o suscripción vigente
+permite crear y modificar datos. Al vencer, el usuario todavía puede consultar,
+exportar y borrar sus datos, pero las RLS bloquean nuevas escrituras aunque se
+intenten directamente por PostgREST.
 
 Los comprobantes viven en un bucket privado de 6 MB. La aplicación valida MIME
 y firma binaria de JPG, PNG, WebP o PDF; usa rutas aleatorias y URLs firmadas de

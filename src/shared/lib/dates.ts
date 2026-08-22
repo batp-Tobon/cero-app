@@ -63,6 +63,32 @@ function pad(n: number): string {
   return String(n).padStart(2, "0");
 }
 
+/** Valida una fecha civil real, no sólo su forma `YYYY-MM-DD`. */
+export function isCalendarDate(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const { year, month, day } = parseISO(value);
+  return (
+    year >= 1 &&
+    month >= 1 &&
+    month <= 12 &&
+    day >= 1 &&
+    day <= daysInMonth(year, month)
+  );
+}
+
+/** Día del mes, ajustado al último día cuando el ciclo usa 29, 30 o 31. */
+export function dateForDayOfMonth(
+  year: number,
+  month: number,
+  day: number,
+): DateISO {
+  if (!Number.isInteger(year) || year < 1 || !Number.isInteger(month) || month < 1 || month > 12) {
+    throw new RangeError("Mes no válido");
+  }
+  const safeDay = Math.min(Math.max(1, Math.trunc(day)), daysInMonth(year, month));
+  return `${year}-${pad(month)}-${pad(safeDay)}`;
+}
+
 /**
  * Suma meses conservando el día de vencimiento. Si el mes destino es más
  * corto, ancla al último día: 31-ene + 1 mes = 28-feb (comportamiento

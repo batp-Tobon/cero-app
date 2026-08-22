@@ -218,6 +218,7 @@ export type RevolvingMovementRow = {
   description: string | null;
   installment_count: number;
   installments_paid: number;
+  statement_applied_amount: number;
   receipt_path: string | null;
   receipt_name: string | null;
   receipt_mime: string | null;
@@ -539,6 +540,7 @@ export type Database = {
           PaymentRow,
           | "id"
           | "created_at"
+          | "installment_number"
           | "payment_date"
           | "principal_paid"
           | "interest_paid"
@@ -613,6 +615,7 @@ export type Database = {
           | "description"
           | "installment_count"
           | "installments_paid"
+          | "statement_applied_amount"
           | "receipt_path"
           | "receipt_name"
           | "receipt_mime"
@@ -829,6 +832,36 @@ export type Database = {
           p_reason: string;
         };
         Returns: string | null;
+      };
+      replace_credit_replay: {
+        Args: {
+          p_credit_id: string;
+          p_expected_history: unknown;
+          p_schedule: unknown;
+          p_allocations: unknown;
+          p_next_status: CreditStatusDB;
+        };
+        Returns: undefined;
+      };
+      register_revolving_movement: {
+        Args: {
+          p_user_id: string;
+          p_account_id: string;
+          p_kind: MovementKindDB;
+          p_amount: number;
+          p_movement_date: string;
+          p_description: string | null;
+          p_installment_count: number;
+          p_receipt_path: string | null;
+          p_receipt_name: string | null;
+          p_receipt_mime: string | null;
+          p_receipt_size: number | null;
+        };
+        Returns: Record<string, unknown>;
+      };
+      delete_revolving_movement: {
+        Args: { p_user_id: string; p_movement_id: string };
+        Returns: Record<string, unknown>;
       };
     };
     Enums: {

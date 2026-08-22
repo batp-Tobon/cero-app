@@ -176,6 +176,23 @@ export async function getAdminOverview(search = ""): Promise<AdminOverview> {
 
   if (subscriptionsRes.error) throw new Error(subscriptionsRes.error.message);
 
+  const paymentRows = (paymentsRes.data ?? []) as SaasBillingPaymentRow[];
+  const auditRows = (auditRes.data ?? []) as AdminAuditLogRow[];
+  const visibleProfileIds = new Set(profiles.map((profile) => profile.id));
+  const relatedProfileIds = [
+    ...new Set([
+      ...paymentRows.map((payment) => payment.user_id),
+      ...auditRows.map((event) => event.actor_user_id),
+    ]),
+  ].filter((id) => !visibleProfileIds.has(id));
+  const relatedProfilesRes = relatedProfileIds.length
+    ? await supabase
+        .from("profiles")
+        .select("id,email,full_name,role,created_at")
+        .in("id", relatedProfileIds)
+    : { data: [] as ProfileSummary[], error: null };
+  if (relatedProfilesRes.error) throw new Error(relatedProfilesRes.error.message);
+
   const plans = (plansRes.data ?? []) as SaasPlanRow[];
   const priceByPlan = new Map(
     ((pricesRes.data ?? []) as SaasPriceRow[]).map((price) => [
@@ -189,8 +206,11 @@ export async function getAdminOverview(search = ""): Promise<AdminOverview> {
       (subscription) => [subscription.user_id, subscription],
     ),
   );
-  const profileById = new Map(profiles.map((profile) => [profile.id, profile]));
-  const paymentRows = (paymentsRes.data ?? []) as SaasBillingPaymentRow[];
+  const profileById = new Map(
+    [...profiles, ...((relatedProfilesRes.data ?? []) as ProfileSummary[])].map(
+      (profile) => [profile.id, profile],
+    ),
+  );
   const proofUrlByPayment = new Map<string, string>();
   await Promise.all(
     paymentRows.map(async (payment) => {
@@ -263,7 +283,7 @@ export async function getAdminOverview(search = ""): Promise<AdminOverview> {
         };
       },
     ),
-    audit: ((auditRes.data ?? []) as AdminAuditLogRow[]).map((event) => {
+    audit: auditRows.map((event) => {
       const actor = profileById.get(event.actor_user_id);
       return {
         id: event.id,

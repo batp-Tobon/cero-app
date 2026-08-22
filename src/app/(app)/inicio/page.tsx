@@ -1,11 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ShieldCheck, Wallet } from "lucide-react";
-import {
-  buildOverview,
-  buildUpcoming,
-  buildDebtSlices,
-} from "@/features/credits/queries";
+import { buildUpcoming, buildDebtSlices } from "@/features/credits/queries";
+import { buildOverview } from "@/core/portfolio";
 import { getDashboardSnapshot } from "@/features/dashboard/queries";
 import { DebtSummary } from "@/features/dashboard/components/debt-summary";
 import { UpcomingPayments } from "@/features/dashboard/components/upcoming-payments";

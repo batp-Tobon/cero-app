@@ -1,28 +1,13 @@
 import { NextResponse } from "next/server";
 import { createClient, getCurrentUser } from "@/infrastructure/supabase/server";
 import { todayISO } from "@/shared/lib/dates";
+import { toCsv } from "@/core/csv";
 
 export const dynamic = "force-dynamic";
 
 type Dataset = "creditos" | "cronogramas" | "pagos" | "actividad";
 
 const DATASETS: Dataset[] = ["creditos", "cronogramas", "pagos", "actividad"];
-
-/** Escapa un valor para CSV (RFC 4180). */
-function cell(value: unknown): string {
-  if (value == null) return "";
-  const text = String(value);
-  return /[",;\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
-}
-
-/**
- * `;` como separador: Excel en español interpreta la coma como decimal y
- * partiría los importes en dos columnas. El BOM le dice que el archivo es UTF-8.
- */
-function toCsv(headers: string[], rows: unknown[][]): string {
-  const lines = [headers.join(";"), ...rows.map((r) => r.map(cell).join(";"))];
-  return `﻿${lines.join("\r\n")}`;
-}
 
 /**
  * Exporta los datos del usuario en CSV. Las RLS acotan las filas, así que

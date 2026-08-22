@@ -11,14 +11,18 @@ import {
 import { money } from "@/core/money";
 import { formatMoney } from "@/shared/lib/format";
 import {
+  claimUploadedReceipt,
   removeReceipt,
-  uploadReceipt,
 } from "@/features/receipts/server";
+import type { PendingReceipt } from "@/features/receipts/constants";
 import type { ActionResult } from "@/shared/types/domain";
 import type { CreditRow } from "@/shared/types/database";
 import { requireBillingWriteAccess } from "@/features/billing/access";
+import { isCalendarDate } from "@/shared/lib/dates";
+import { createAdminClient } from "@/infrastructure/supabase/admin";
+import { publicActionError } from "@/shared/lib/server-errors";
 
-const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+const civilDate = z.string().refine(isCalendarDate, "Elige una fecha válida.");
 
 /** Ventana en la que dos movimientos idénticos se consideran un doble envío. */
 const DUPLICATE_WINDOW_MS = 30_000;
@@ -29,11 +33,6 @@ function revalidateCredit(creditId: string) {
   revalidatePath(`/creditos/${creditId}`);
   revalidatePath("/actividad");
   revalidatePath("/presupuesto");
-}
-
-function receiptFile(data?: FormData): File | null {
-  const value = data?.get("receipt");
-  return value instanceof File && value.size > 0 ? value : null;
 }
 
 /** Saldo vivo actual: el saldo inicial de la primera cuota sin pagar. */
@@ -87,7 +86,7 @@ async function isDuplicate(
 
 const paymentSchema = z.object({
   creditId: z.string().uuid(),
-  paymentDate: z.string().regex(ISO_DATE, "Elige la fecha del pago."),
+  paymentDate: civilDate,
   amountPaid: z.number().positive("El valor pagado debe ser mayor que cero."),
   extraPrincipal: z.number().min(0).default(0),
   notes: z.string().trim().max(300).optional().nullable(),
@@ -110,7 +109,7 @@ interface PaymentResultData {
  */
 export async function registerPayment(
   input: PaymentInput,
-  receiptData?: FormData,
+  pendingReceipt?: PendingReceipt | null,
 ): Promise<ActionResult<PaymentResultData>> {
   const parsed = paymentSchema.safeParse(input);
   if (!parsed.success) {
@@ -127,6 +126,7 @@ export async function registerPayment(
   const supabase = await createClient();
 
   try {
+    const admin = createAdminClient();
     const credit = await loadCredit(supabase, value.creditId);
     if (!credit) return { ok: false, error: "No encontramos ese crédito." };
     if (credit.status === "cancelled") {
@@ -164,26 +164,22 @@ export async function registerPayment(
       return { ok: false, error: "Ese pago ya se acaba de registrar." };
     }
 
-    const receipt = await uploadReceipt(
+    const receipt = await claimUploadedReceipt(
       supabase,
       user.id,
       "credits",
       credit.id,
-      receiptFile(receiptData),
+      pendingReceipt,
     );
 
-    const { data: payment, error } = await supabase
+    const { data: payment, error } = await admin
       .from("payments")
       .insert({
         credit_id: credit.id,
         user_id: user.id,
-        installment_number: installment,
         payment_date: value.paymentDate,
         amount_paid: money(value.amountPaid),
-        principal_paid: 0,
-        interest_paid: 0,
         extra_principal: money(value.extraPrincipal),
-        balance_after: null,
         notes: value.notes?.trim() || null,
         ...(receipt ?? {}),
       })
@@ -192,10 +188,17 @@ export async function registerPayment(
 
     if (error) {
       await removeReceipt(supabase, receipt?.receipt_path);
-      return { ok: false, error: error.message };
+      return { ok: false, error: publicActionError("payment.insert", error) };
     }
 
-    const result = await rebuildCreditSchedule(supabase, credit);
+    let result: RebuildResult;
+    try {
+      result = await rebuildCreditSchedule(supabase, credit);
+    } catch (replayError) {
+      await admin.from("payments").delete().eq("id", payment.id);
+      await removeReceipt(supabase, receipt?.receipt_path);
+      throw replayError;
+    }
 
     await supabase.from("activity").insert({
       user_id: user.id,
@@ -246,7 +249,7 @@ export async function registerPayment(
 
 const extraSchema = z.object({
   creditId: z.string().uuid(),
-  paymentDate: z.string().regex(ISO_DATE, "Elige la fecha del abono."),
+  paymentDate: civilDate,
   amount: z.number().positive("El abono debe ser mayor que cero."),
   notes: z.string().trim().max(300).optional().nullable(),
 });
@@ -263,7 +266,7 @@ interface ExtraPrincipalResultData {
 /** Registra un abono extraordinario a capital y recalcula el plan. */
 export async function registerExtraPrincipal(
   input: ExtraPrincipalInput,
-  receiptData?: FormData,
+  pendingReceipt?: PendingReceipt | null,
 ): Promise<ActionResult<ExtraPrincipalResultData>> {
   const parsed = extraSchema.safeParse(input);
   if (!parsed.success) {
@@ -280,6 +283,7 @@ export async function registerExtraPrincipal(
   const supabase = await createClient();
 
   try {
+    const admin = createAdminClient();
     const credit = await loadCredit(supabase, value.creditId);
     if (!credit) return { ok: false, error: "No encontramos ese crédito." };
     if (credit.status === "cancelled") {
@@ -312,15 +316,15 @@ export async function registerExtraPrincipal(
       .neq("status", "paid");
     const pendingBefore = count ?? 0;
 
-    const receipt = await uploadReceipt(
+    const receipt = await claimUploadedReceipt(
       supabase,
       user.id,
       "credits",
       credit.id,
-      receiptFile(receiptData),
+      pendingReceipt,
     );
 
-    const { data: payment, error } = await supabase
+    const { data: payment, error } = await admin
       .from("payments")
       .insert({
         credit_id: credit.id,
@@ -340,10 +344,17 @@ export async function registerExtraPrincipal(
 
     if (error) {
       await removeReceipt(supabase, receipt?.receipt_path);
-      return { ok: false, error: error.message };
+      return { ok: false, error: publicActionError("principal.insert", error) };
     }
 
-    const result = await rebuildCreditSchedule(supabase, credit);
+    let result: RebuildResult;
+    try {
+      result = await rebuildCreditSchedule(supabase, credit);
+    } catch (replayError) {
+      await admin.from("payments").delete().eq("id", payment.id);
+      await removeReceipt(supabase, receipt?.receipt_path);
+      throw replayError;
+    }
     const installmentsSaved = Math.max(
       0,
       pendingBefore - result.installmentsLeft,
@@ -388,7 +399,7 @@ export async function registerExtraPrincipal(
 
 const editSchema = z.object({
   paymentId: z.string().uuid(),
-  paymentDate: z.string().regex(ISO_DATE, "Elige la fecha."),
+  paymentDate: civilDate,
   amountPaid: z.number().min(0),
   extraPrincipal: z.number().min(0),
   notes: z.string().trim().max(300).optional().nullable(),
@@ -404,7 +415,7 @@ type EditPaymentInput = z.input<typeof editSchema>;
  */
 export async function updatePayment(
   input: EditPaymentInput,
-  receiptData?: FormData,
+  pendingReceipt?: PendingReceipt | null,
 ): Promise<ActionResult<RebuildResult>> {
   const parsed = editSchema.safeParse(input);
   if (!parsed.success) {
@@ -425,26 +436,27 @@ export async function updatePayment(
   const supabase = await createClient();
 
   try {
+    const admin = createAdminClient();
     const { data: existing, error: loadError } = await supabase
       .from("payments")
-      .select("id, credit_id, receipt_path")
+      .select("*")
       .eq("id", value.paymentId)
       .maybeSingle();
-    if (loadError) return { ok: false, error: loadError.message };
+    if (loadError) return { ok: false, error: publicActionError("payment.load", loadError) };
     if (!existing) return { ok: false, error: "No encontramos ese movimiento." };
 
     const credit = await loadCredit(supabase, existing.credit_id);
     if (!credit) return { ok: false, error: "No encontramos ese crédito." };
 
-    const receipt = await uploadReceipt(
+    const receipt = await claimUploadedReceipt(
       supabase,
       user.id,
       "credits",
       credit.id,
-      receiptFile(receiptData),
+      pendingReceipt,
     );
 
-    const { error } = await supabase
+    const { error } = await admin
       .from("payments")
       .update({
         payment_date: value.paymentDate,
@@ -456,14 +468,37 @@ export async function updatePayment(
       .eq("id", value.paymentId);
     if (error) {
       await removeReceipt(supabase, receipt?.receipt_path);
-      return { ok: false, error: error.message };
+      return { ok: false, error: publicActionError("payment.update", error) };
+    }
+
+    let result: RebuildResult;
+    try {
+      result = await rebuildCreditSchedule(supabase, credit);
+    } catch (replayError) {
+      await admin
+        .from("payments")
+        .update({
+          payment_date: existing.payment_date,
+          amount_paid: existing.amount_paid,
+          principal_paid: existing.principal_paid,
+          interest_paid: existing.interest_paid,
+          extra_principal: existing.extra_principal,
+          other_paid: existing.other_paid,
+          balance_after: existing.balance_after,
+          notes: existing.notes,
+          receipt_path: existing.receipt_path,
+          receipt_name: existing.receipt_name,
+          receipt_mime: existing.receipt_mime,
+          receipt_size: existing.receipt_size,
+        })
+        .eq("id", existing.id);
+      await removeReceipt(supabase, receipt?.receipt_path);
+      throw replayError;
     }
 
     if (receipt && existing.receipt_path !== receipt.receipt_path) {
-      await removeReceipt(supabase, existing.receipt_path);
+      await removeReceipt(admin, existing.receipt_path);
     }
-
-    const result = await rebuildCreditSchedule(supabase, credit);
 
     await supabase.from("activity").insert({
       user_id: user.id,
@@ -493,30 +528,36 @@ export async function deletePayment(
   const supabase = await createClient();
 
   try {
+    const admin = createAdminClient();
     const { data: existing, error: loadError } = await supabase
       .from("payments")
-      .select("id, credit_id, amount_paid, extra_principal, other_paid, receipt_path")
+      .select("*")
       .eq("id", paymentId)
       .maybeSingle();
-    if (loadError) return { ok: false, error: loadError.message };
+    if (loadError) return { ok: false, error: publicActionError("payment.delete.load", loadError) };
     if (!existing) return { ok: false, error: "No encontramos ese movimiento." };
 
     const credit = await loadCredit(supabase, existing.credit_id);
     if (!credit) return { ok: false, error: "No encontramos ese crédito." };
 
-    // La actividad enlazada se queda sin pago (ON DELETE SET NULL); se borra
-    // para que el historial no muestre un movimiento que ya no existe.
-    await supabase.from("activity").delete().eq("payment_id", paymentId);
-
-    const { error } = await supabase
+    const { error } = await admin
       .from("payments")
       .delete()
       .eq("id", paymentId);
-    if (error) return { ok: false, error: error.message };
+    if (error) return { ok: false, error: publicActionError("payment.delete", error) };
 
-    await removeReceipt(supabase, existing.receipt_path);
+    let result: RebuildResult;
+    try {
+      result = await rebuildCreditSchedule(supabase, credit);
+    } catch (replayError) {
+      await admin.from("payments").insert(existing);
+      throw replayError;
+    }
 
-    const result = await rebuildCreditSchedule(supabase, credit);
+    // La actividad enlazada queda sin pago por ON DELETE SET NULL; se elimina
+    // sólo después de confirmar el nuevo cronograma.
+    await supabase.from("activity").delete().eq("payment_id", paymentId);
+    await removeReceipt(admin, existing.receipt_path);
 
     await supabase.from("activity").insert({
       user_id: user.id,
@@ -541,5 +582,5 @@ export async function deletePayment(
 }
 
 function errorMessage(e: unknown): string {
-  return e instanceof Error ? e.message : "No pudimos completar la operación.";
+  return publicActionError("payment.replay", e);
 }

@@ -67,10 +67,11 @@ export const getCurrentProfile = cache(async (): Promise<ProfileRow | null> => {
   const user = await getCurrentUser();
   if (!user) return null;
   const supabase = await createClient();
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("profiles")
     .select("*")
     .eq("id", user.id)
     .maybeSingle();
+  if (error) throw new Error(error.message);
   return data;
 });

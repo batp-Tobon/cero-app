@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createClient, getCurrentUser } from "@/infrastructure/supabase/server";
 import { requireBillingWriteAccess } from "@/features/billing/access";
+import { publicActionError } from "@/shared/lib/server-errors";
 import type { ActionResult } from "@/shared/types/domain";
 
 export interface CreditMember {
@@ -136,7 +137,9 @@ export async function shareCredit(
     .rpc("find_profile_by_email", { p_email: email })
     .maybeSingle();
 
-  if (findError) return { ok: false, error: findError.message };
+  if (findError) {
+    return { ok: false, error: publicActionError("credit.share.lookup", findError) };
+  }
   if (!found) {
     return {
       ok: false,
@@ -155,7 +158,7 @@ export async function shareCredit(
     if (error.code === "23505") {
       return { ok: false, error: "Esa persona ya tiene acceso al crédito." };
     }
-    return { ok: false, error: error.message };
+    return { ok: false, error: publicActionError("credit.share", error) };
   }
 
   await supabase.from("activity").insert({
@@ -210,13 +213,16 @@ export async function unshareCredit(
     };
   }
 
-  const { error } = await supabase
+  const { data: removed, error } = await supabase
     .from("credit_members")
     .delete()
     .eq("credit_id", creditId)
-    .eq("user_id", userId);
+    .eq("user_id", userId)
+    .select("user_id")
+    .maybeSingle();
 
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: publicActionError("credit.unshare", error) };
+  if (!removed) return { ok: false, error: "Esa persona ya no tenía acceso." };
 
   revalidatePath(`/creditos/${creditId}`);
   revalidatePath("/creditos");

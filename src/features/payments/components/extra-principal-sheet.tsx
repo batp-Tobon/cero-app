@@ -17,6 +17,10 @@ import { Label } from "@/shared/ui/label";
 import { AmountField } from "@/shared/components/amount-field";
 import { InlineNotice } from "@/shared/components/states";
 import { ReceiptField } from "@/features/receipts/components/receipt-field";
+import {
+  discardPendingReceipt,
+  uploadReceiptFromForm,
+} from "@/features/receipts/client";
 import { registerExtraPrincipal } from "@/features/payments/actions";
 import { formatMoney } from "@/shared/lib/format";
 import { todayISO } from "@/shared/lib/dates";
@@ -69,30 +73,41 @@ export function ExtraPrincipalSheet({
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (pending) return;
-    const receiptData = new FormData(e.currentTarget as HTMLFormElement);
+    const form = e.currentTarget as HTMLFormElement;
     setError(null);
     setPending(true);
 
-    const response = await registerExtraPrincipal({
-      creditId,
-      paymentDate,
-      amount,
-    }, receiptData);
+    let receipt = null;
+    try {
+      receipt = await uploadReceiptFromForm(form, "credits", creditId);
+      const response = await registerExtraPrincipal(
+        { creditId, paymentDate, amount },
+        receipt,
+      );
 
-    if (!response.ok) {
-      setError(response.error);
+      if (!response.ok) {
+        await discardPendingReceipt(receipt);
+        setError(response.error);
+        return;
+      }
+
+      setResult(response.data);
+      router.refresh();
+
+      if (response.data.creditSettled) {
+        toast.success("Crédito pagado", {
+          description: `${creditName} llegó a cero.`,
+        });
+      }
+    } catch (uploadError) {
+      await discardPendingReceipt(receipt);
+      setError(
+        uploadError instanceof Error
+          ? uploadError.message
+          : "No pudimos subir el comprobante.",
+      );
+    } finally {
       setPending(false);
-      return;
-    }
-
-    setResult(response.data);
-    setPending(false);
-    router.refresh();
-
-    if (response.data.creditSettled) {
-      toast.success("Crédito pagado", {
-        description: `${creditName} llegó a cero.`,
-      });
     }
   }
 

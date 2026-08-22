@@ -6,6 +6,8 @@ import { money } from "@/core/money";
 import { requireBillingWriteAccess } from "@/features/billing/access";
 import { createClient, getCurrentUser } from "@/infrastructure/supabase/server";
 import type { ActionResult } from "@/shared/types/domain";
+import { isCalendarDate } from "@/shared/lib/dates";
+import { publicActionError } from "@/shared/lib/server-errors";
 
 const categories = [
   "housing",
@@ -18,16 +20,6 @@ const categories = [
   "leisure",
   "other",
 ] as const;
-
-function isCalendarDate(value: string): boolean {
-  const [year, month, day] = value.split("-").map(Number);
-  const date = new Date(Date.UTC(year, month - 1, day));
-  return (
-    date.getUTCFullYear() === year &&
-    date.getUTCMonth() === month - 1 &&
-    date.getUTCDate() === day
-  );
-}
 
 const budgetSchema = z.object({
   month: z
@@ -119,7 +111,11 @@ export async function saveMonthlyBudget(
   if (error || !data) {
     return {
       ok: false,
-      error: error?.message ?? "No pudimos guardar el presupuesto.",
+      error: publicActionError(
+        "budget.save",
+        error,
+        "No pudimos guardar el presupuesto.",
+      ),
     };
   }
 

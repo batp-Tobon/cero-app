@@ -2,11 +2,9 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/shared/types/database";
-import {
-  RECEIPT_BUCKET,
-  RECEIPT_MAX_BYTES,
-} from "@/features/receipts/constants";
+import { RECEIPT_BUCKET, RECEIPT_MAX_BYTES } from "@/features/receipts/constants";
 import { hasValidReceiptSignature } from "@/features/receipts/validation";
+import type { PendingReceipt } from "@/features/receipts/constants";
 
 const EXTENSION_BY_MIME = new Map([
   ["image/jpeg", "jpg"],
@@ -24,42 +22,46 @@ export interface UploadedReceipt {
   receipt_size: number;
 }
 
-/**
- * Guarda un comprobante en un bucket privado. El nombre físico nunca reutiliza
- * el nombre suministrado por el navegador y no se usa upsert, evitando tanto
- * colisiones como permisos de actualización innecesarios.
- */
-export async function uploadReceipt(
+/** Valida en servidor un archivo ya subido y devuelve metadatos confiables. */
+export async function claimUploadedReceipt(
   db: DB,
   userId: string,
   scope: "credits" | "cards",
   entityId: string,
-  file: File | null | undefined,
+  pending: PendingReceipt | null | undefined,
 ): Promise<UploadedReceipt | null> {
-  if (!file || file.size === 0) return null;
+  if (!pending) return null;
+
+  const safePrefix = `${userId}/${scope}/${entityId}/`;
+  const pathIsValid =
+    pending.path.startsWith(safePrefix) &&
+    /^[0-9a-f-]{36}\.(jpg|png|webp|pdf)$/.test(pending.path.slice(safePrefix.length));
+  if (!pathIsValid || pending.name.length < 1 || pending.name.length > 200) {
+    throw new Error("La ruta del comprobante no es válida.");
+  }
+
+  const { data: file, error } = await db.storage
+    .from(RECEIPT_BUCKET)
+    .download(pending.path);
+  if (error || !file) throw new Error("No pudimos verificar el comprobante.");
 
   const extension = EXTENSION_BY_MIME.get(file.type);
-  if (!extension) {
-    throw new Error("El comprobante debe ser JPG, PNG, WebP o PDF.");
-  }
-  if (file.size > RECEIPT_MAX_BYTES) {
-    throw new Error("El comprobante no puede superar 6 MB.");
-  }
+  const expectedExtension = pending.path.split(".").pop();
   const signature = new Uint8Array(await file.slice(0, 12).arrayBuffer());
-  if (!hasValidReceiptSignature(file.type, signature)) {
-    throw new Error("El contenido del comprobante no coincide con su tipo de archivo.");
+  if (
+    !extension ||
+    extension !== expectedExtension ||
+    file.size <= 0 ||
+    file.size > RECEIPT_MAX_BYTES ||
+    !hasValidReceiptSignature(file.type, signature)
+  ) {
+    await removeReceipt(db, pending.path);
+    throw new Error("El comprobante no superó la validación de seguridad.");
   }
-
-  const path = `${userId}/${scope}/${entityId}/${crypto.randomUUID()}.${extension}`;
-  const { error } = await db.storage.from(RECEIPT_BUCKET).upload(path, file, {
-    contentType: file.type,
-    upsert: false,
-  });
-  if (error) throw new Error(`No pudimos subir el comprobante: ${error.message}`);
 
   return {
-    receipt_path: path,
-    receipt_name: file.name.slice(0, 200) || `comprobante.${extension}`,
+    receipt_path: pending.path,
+    receipt_name: pending.name,
     receipt_mime: file.type,
     receipt_size: file.size,
   };
