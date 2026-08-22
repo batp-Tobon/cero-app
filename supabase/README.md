@@ -82,6 +82,13 @@ Un **administrador** lee todo mediante `public.is_admin()`, pero no escribe
 datos financieros ajenos. Un trigger impide que nadie se ascienda a sí mismo:
 sin él bastaría un PATCH a `/rest/v1/profiles` para tomar el control.
 
+El **primer** admin se crea desde el SQL editor, donde `auth.uid()` es NULL y el
+trigger no interviene:
+
+```sql
+update public.profiles set role = 'admin' where email = 'tu@correo.com';
+```
+
 Estas funciones son `security definer` para no reevaluar las políticas de
 `credits` fila a fila en planes de 72 cuotas.
 

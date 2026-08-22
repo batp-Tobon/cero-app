@@ -56,7 +56,8 @@ y la función de búsqueda para compartir.
 ### El primer administrador
 
 El registro es abierto, pero nadie nace admin. Tras crear tu cuenta, ejecuta una
-vez en el SQL editor de Supabase:
+vez en el SQL editor de Supabase (allí `auth.uid()` es NULL, y por eso el
+trigger que bloquea los auto-ascensos deja pasar este primer cambio):
 
 ```sql
 update public.profiles set role = 'admin' where email = 'tu@correo.com';

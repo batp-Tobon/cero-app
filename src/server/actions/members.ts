@@ -22,7 +22,7 @@ export async function getCreditMembers(
 
   const { data, error } = await supabase
     .from("credit_members")
-    .select("user_id, role, profiles:user_id(full_name, email)")
+    .select("user_id, role, profiles(full_name, email)")
     .eq("credit_id", creditId);
 
   if (error) throw new Error(error.message);
