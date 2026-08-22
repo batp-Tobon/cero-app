@@ -1,13 +1,12 @@
 import type { Metadata } from "next";
-import { Wallet } from "lucide-react";
-import { getCurrentProfile } from "@/infrastructure/supabase/server";
+import Link from "next/link";
+import { ShieldCheck, Wallet } from "lucide-react";
 import {
   buildOverview,
   buildUpcoming,
   buildDebtSlices,
-  getCreditSummaries,
 } from "@/features/credits/queries";
-import { getRevolvingSummaries } from "@/features/revolving/queries";
+import { getDashboardSnapshot } from "@/features/dashboard/queries";
 import { DebtSummary } from "@/features/dashboard/components/debt-summary";
 import { UpcomingPayments } from "@/features/dashboard/components/upcoming-payments";
 import { MonthSummary } from "@/features/dashboard/components/month-summary";
@@ -16,21 +15,17 @@ import { UserAvatar } from "@/shared/components/user-avatar";
 import { EmptyState, ErrorState } from "@/shared/components/states";
 import { greeting } from "@/shared/lib/dates";
 import { firstName } from "@/shared/lib/utils";
+import { planAllows } from "@/core/billing";
+import { AiEntryCard } from "@/features/ai/components/ai-entry-card";
 
 export const metadata: Metadata = { title: "Inicio" };
 
 export default async function DashboardPage() {
   // Las tres consultas van en paralelo: pedir el perfil primero y esperar a
   // que vuelva antes de mirar los créditos añadía un viaje de red entero.
-  let profile;
-  let summaries;
-  let cards;
+  let snapshot;
   try {
-    [profile, summaries, cards] = await Promise.all([
-      getCurrentProfile(),
-      getCreditSummaries(),
-      getRevolvingSummaries(),
-    ]);
+    snapshot = await getDashboardSnapshot();
   } catch (error) {
     return (
       <ErrorState
@@ -40,9 +35,14 @@ export default async function DashboardPage() {
     );
   }
 
+  const { profile, credits: summaries, cards, entitlement } = snapshot;
+
   const overview = buildOverview(summaries, cards);
   const upcoming = buildUpcoming(summaries, cards);
-  const name = firstName(profile?.full_name) || "de nuevo";
+  const name = firstName(profile?.fullName) || "de nuevo";
+  const aiEnabled = Boolean(
+    entitlement?.canWrite && planAllows(entitlement, "ai_insights"),
+  );
 
   return (
     <div className="animate-fade-in">
@@ -50,11 +50,22 @@ export default async function DashboardPage() {
         <p className="text-base font-semibold tracking-tight">
           {greeting()}, {name}
         </p>
-        <UserAvatar
-          name={profile?.full_name ?? null}
-          avatarUrl={profile?.avatar_url ?? null}
-          href="/perfil"
-        />
+        <div className="flex items-center gap-1.5">
+          {profile?.role === "admin" && (
+            <Link
+              href="/admin"
+              aria-label="Abrir panel administrativo"
+              className="flex h-10 w-10 items-center justify-center rounded-full text-primary transition-colors hover:bg-primary/10"
+            >
+              <ShieldCheck className="h-5 w-5" aria-hidden />
+            </Link>
+          )}
+          <UserAvatar
+            name={profile?.fullName ?? null}
+            avatarUrl={profile?.avatarUrl ?? null}
+            href="/perfil"
+          />
+        </div>
       </header>
 
       {summaries.length === 0 && cards.length === 0 ? (
@@ -79,6 +90,7 @@ export default async function DashboardPage() {
           <CreditMix slices={buildDebtSlices(summaries, cards)} />
         </>
       )}
+      <AiEntryCard enabled={aiEnabled} />
     </div>
   );
 }

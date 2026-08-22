@@ -17,6 +17,7 @@ import { Label } from "@/shared/ui/label";
 import { AmountField } from "@/shared/components/amount-field";
 import { OptionGrid } from "@/shared/components/option-grid";
 import { InlineNotice } from "@/shared/components/states";
+import { ReceiptField } from "@/features/receipts/components/receipt-field";
 import { registerMovement, registerStatement } from "@/features/revolving/actions";
 import { formatMoney } from "@/shared/lib/format";
 import { todayISO } from "@/shared/lib/dates";
@@ -60,23 +61,26 @@ export function MovementButton({
   const [amount, setAmount] = React.useState(0);
   const [date, setDate] = React.useState(todayISO);
   const [description, setDescription] = React.useState("");
+  const [installmentCount, setInstallmentCount] = React.useState(1);
   const [pending, setPending] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
-  React.useEffect(() => {
-    if (!open) return;
+  function openEditor() {
     setKind(defaultKind);
     setAmount(0);
     setDate(todayISO());
     setDescription("");
+    setInstallmentCount(1);
     setError(null);
-  }, [open, defaultKind]);
+    setOpen(true);
+  }
 
   const ceiling = kind === "payment" ? balance : available;
   const exceeds = amount > ceiling + 0.009;
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
+    const receiptData = new FormData(e.currentTarget as HTMLFormElement);
     setError(null);
     setPending(true);
 
@@ -86,7 +90,8 @@ export function MovementButton({
       amount,
       movementDate: date,
       description,
-    });
+      installmentCount,
+    }, receiptData);
     setPending(false);
 
     if (!result.ok) {
@@ -107,7 +112,7 @@ export function MovementButton({
         variant={variant}
         size={size}
         className={className}
-        onClick={() => setOpen(true)}
+        onClick={openEditor}
       >
         {size !== "sm" && <Plus className="h-4 w-4" aria-hidden />}
         {label}
@@ -149,6 +154,34 @@ export function MovementButton({
               </p>
             </div>
 
+            {kind === "charge" && (
+              <div className="space-y-1.5">
+                <Label htmlFor="movement-installments">Diferir a cuotas</Label>
+                <Input
+                  id="movement-installments"
+                  type="number"
+                  inputMode="numeric"
+                  min={1}
+                  max={60}
+                  value={installmentCount}
+                  onChange={(event) =>
+                    setInstallmentCount(
+                      Math.min(60, Math.max(1, Number(event.target.value) || 1)),
+                    )
+                  }
+                  disabled={pending}
+                />
+                <p className="text-xs text-muted-foreground">
+                  {installmentCount > 1 && amount > 0
+                    ? `${installmentCount} cuotas aproximadas de ${formatMoney(
+                        amount / installmentCount,
+                        currency,
+                      )}`
+                    : "Usa 1 si la compra no fue diferida."}
+                </p>
+              </div>
+            )}
+
             <div className="space-y-1.5">
               <Label htmlFor="movement-date">Fecha</Label>
               <Input
@@ -161,6 +194,10 @@ export function MovementButton({
                 disabled={pending}
               />
             </div>
+
+            {kind === "payment" && (
+              <ReceiptField id="movement-receipt" disabled={pending} />
+            )}
 
             <div className="space-y-1.5">
               <Label htmlFor="movement-description">Descripción (opcional)</Label>
@@ -222,16 +259,19 @@ export function StatementButton({
   const [pending, setPending] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
-  React.useEffect(() => {
-    if (!open) return;
+  function openEditor() {
     setError(null);
+    setTotalDue(0);
+    setMinimumDue(0);
+    setReducedDue(0);
     // Se proponen las fechas del ciclo configurado; siempre editables.
     const { year, month } = splitToday();
     setStatementDate(`${year}-${pad(month)}-${pad(statementDay)}`);
     const dueMonth = month === 12 ? 1 : month + 1;
     const dueYear = month === 12 ? year + 1 : year;
     setDueDate(`${dueYear}-${pad(dueMonth)}-${pad(dueDay)}`);
-  }, [open, statementDay, dueDay]);
+    setOpen(true);
+  }
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -263,7 +303,7 @@ export function StatementButton({
       <Button
         variant="outline"
         className={className}
-        onClick={() => setOpen(true)}
+        onClick={openEditor}
       >
         <Receipt className="h-4 w-4" aria-hidden />
         Registrar extracto

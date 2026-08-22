@@ -14,10 +14,14 @@ features/
   credits/      créditos amortizados: plan de pagos, compartir, ajustes
   payments/     registrar, corregir y borrar pagos y abonos
   revolving/    tarjetas y cupos rotativos
+  receipts/     comprobantes privados, validación y URLs temporales
+  budget/       ingresos fechados, gastos del mes y obligaciones derivadas
+  billing/      acceso comercial: plan, prueba, Wompi, Bre-B y suscripción vigente
+  ai/           entrada visual al análisis financiero privado
   dashboard/    lo que compone la pantalla de inicio
   activity/     línea de tiempo de movimientos
   profile/      perfil, preferencias, exportar
-  admin/        backoffice: usuarios, roles, reparación de planes
+  admin/        backoffice: clientes, suscripciones, cobros y auditoría
 ```
 
 ## Qué hay dentro de un módulo

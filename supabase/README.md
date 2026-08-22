@@ -23,8 +23,22 @@ SQL Editor → pega cada archivo **en orden** y ejecútalo:
 5. `20260821000005_revolving.sql` — tarjetas y cupos rotativos
 6. `20260821000006_schedule_replay.sql` — el plan pasa a derivarse del historial
 7. `20260821000007_sharing_rpc.sql` — buscar a quién invitar por correo
+8. `20260821000008_fix_role_bootstrap.sql` — arranque seguro y relaciones
+9. `20260821000009_appearance.sql` — apariencia por producto
+10. `20260822154323_monthly_budget.sql` — presupuesto mensual
+11. `20260822161251_dated_budget_incomes.sql` — ingresos con fecha
+12. `20260822162649_harden_function_permissions.sql` — permisos de funciones
+13. `20260822170017_secure_saas_billing_foundation.sql` — dominio SaaS seguro
+14. `20260822172427_resolve_security_advisor_findings.sql` — cierre de hallazgos
+15. `20260822175836_receipts_trials_and_ai_plans.sql` — comprobantes, prueba e IA
+16. `20260822182500_cover_foreign_key_indexes.sql` — índices de claves foráneas
+17. `20260822183500_document_webhook_client_denial.sql` — webhooks sólo servidor
+18. `20260822200000_saas_checkout_and_fast_billing.sql` — checkout Wompi, Bre-B y lectura comercial rápida
+19. `20260822203000_fast_dashboard_snapshot.sql` — Inicio en una sola lectura RLS
+20. `20260822204500_fast_subscription_snapshot.sql` — Plan y pagos en una sola lectura RLS
 
-Todos son idempotentes: se pueden reejecutar sin romper nada.
+Supabase registra cuáles ya se aplicaron. No ejecutes manualmente una migración
+que figure en el historial remoto.
 
 ## Modelo
 
@@ -35,14 +49,21 @@ auth.users
     └── credits           un crédito del usuario
           ├── credit_members    quién más lo ve (pareja)
           ├── credit_schedule   una fila por cuota  ← derivada del historial
-          └── payments          pagos de cuota y abonos a capital  ← los hechos
+          └── payments          pagos, abonos y comprobantes  ← los hechos
 
     └── revolving_accounts    tarjetas y cupos (un solo dueño)
           ├── revolving_statements  el corte del mes
-          └── revolving_movements   compras, pagos, intereses
+          └── revolving_movements   compras diferidas, pagos y comprobantes
 
     └── activity          línea de tiempo de la pantalla Actividad
     └── notifications     avisos (arquitectura lista, envío pendiente)
+
+    └── saas_subscriptions       acceso comercial vigente
+          ├── saas_subscription_events  historial de cambios
+          ├── saas_billing_payments     cobros del producto, no cuotas
+          └── saas_usage_counters       límites por periodo
+
+    └── admin_audit_log          cambios administrativos con motivo
 ```
 
 ### `credit_schedule` manda
@@ -70,17 +91,22 @@ traer todo el plan a la aplicación para sumarlo.
 
 ## Seguridad
 
-RLS activo en las nueve tablas. Un usuario sólo alcanza:
+RLS activo en todas las tablas expuestas. Un usuario sólo alcanza:
 
 - su perfil, y el de quien comparte un crédito con él;
 - los créditos propios y aquellos en los que figura como miembro;
-- las cuotas y pagos de esos créditos, vía `public.can_access_credit(uuid)`;
-- sus tarjetas (`public.owns_revolving(uuid)`), que no se comparten;
+- las cuotas y pagos de esos créditos, mediante helpers privados de pertenencia;
+- sus tarjetas, que no se comparten;
 - su propia actividad y sus notificaciones.
 
-Un **administrador** lee todo mediante `public.is_admin()`, pero no escribe
-datos financieros ajenos. Un trigger impide que nadie se ascienda a sí mismo:
-sin él bastaría un PATCH a `/rest/v1/profiles` para tomar el control.
+Un **administrador** gestiona perfiles, roles, planes, suscripciones, cobros
+SaaS y auditoría. No recibe acceso a créditos, tarjetas, pagos, actividad ni
+presupuestos ajenos.
+
+El cliente sólo tiene privilegio `UPDATE` sobre las columnas editables de su
+perfil. No puede insertar su perfil ni modificar `id`, `email` o `role`. Los
+cambios administrativos de rol y suscripción son transaccionales, exigen un
+motivo y escriben `admin_audit_log` antes de confirmar.
 
 El **primer** admin se crea desde el SQL editor, donde `auth.uid()` es NULL y el
 trigger no interviene:
@@ -89,10 +115,16 @@ trigger no interviene:
 update public.profiles set role = 'admin' where email = 'tu@correo.com';
 ```
 
-Estas funciones son `security definer` para no reevaluar las políticas de
-`credits` fila a fila en planes de 72 cuotas.
+Los helpers privilegiados viven en el esquema `private`, fuera de PostgREST.
+Tienen `search_path` vacío, comprueban `auth.uid()` y sólo se ejecutan desde
+políticas o wrappers públicos `security invoker` explícitamente autorizados.
 
 El rol `anon` no tiene ningún permiso sobre estas tablas.
+
+Los comprobantes viven en un bucket privado de 6 MB. La aplicación valida MIME
+y firma binaria de JPG, PNG, WebP o PDF; usa rutas aleatorias y URLs firmadas de
+10 minutos. El dueño y los miembros del crédito pueden leer el soporte, pero no
+subir archivos a carpetas ajenas. Las tarjetas siguen siendo sólo del dueño.
 
 ## Índices
 

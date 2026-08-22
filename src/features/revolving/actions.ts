@@ -6,6 +6,11 @@ import { createClient, getCurrentUser } from "@/infrastructure/supabase/server";
 import { money } from "@/core/money";
 import { formatMoney } from "@/shared/lib/format";
 import type { ActionResult } from "@/shared/types/domain";
+import { requireBillingWriteAccess } from "@/features/billing/access";
+import {
+  removeReceipt,
+  uploadReceipt,
+} from "@/features/receipts/server";
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -14,6 +19,12 @@ function revalidateRevolving(accountId?: string) {
   revalidatePath("/creditos");
   if (accountId) revalidatePath(`/tarjetas/${accountId}`);
   revalidatePath("/actividad");
+  revalidatePath("/presupuesto");
+}
+
+function receiptFile(data?: FormData): File | null {
+  const value = data?.get("receipt");
+  return value instanceof File && value.size > 0 ? value : null;
 }
 
 // ---------------------------------------------------------------------------
@@ -57,6 +68,9 @@ export async function createRevolvingAccount(
     return { ok: false, error: parsed.error.issues[0].message };
   }
   const value = parsed.data;
+
+  const billing = await requireBillingWriteAccess();
+  if (!billing.ok) return billing;
 
   const user = await getCurrentUser();
   if (!user) return { ok: false, error: "Tu sesión expiró." };
@@ -167,6 +181,9 @@ export async function updateRevolvingAccount(
   }
   const value = parsed.data;
 
+  const billing = await requireBillingWriteAccess();
+  if (!billing.ok) return billing;
+
   const user = await getCurrentUser();
   if (!user) return { ok: false, error: "Tu sesión expiró." };
 
@@ -235,6 +252,7 @@ const movementSchema = z.object({
   amount: z.number().positive("El importe debe ser mayor que cero."),
   movementDate: z.string().regex(ISO_DATE, "Elige la fecha."),
   description: z.string().trim().max(120).optional().nullable(),
+  installmentCount: z.number().int().min(1).max(60).default(1),
 });
 
 export type MovementInput = z.input<typeof movementSchema>;
@@ -249,12 +267,16 @@ const MOVEMENT_LABEL: Record<MovementInput["kind"], string> = {
 /** Registra una compra, un pago, intereses o una cuota de manejo. */
 export async function registerMovement(
   input: MovementInput,
+  receiptData?: FormData,
 ): Promise<ActionResult<{ balance: number; available: number }>> {
   const parsed = movementSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0].message };
   }
   const value = parsed.data;
+
+  const billing = await requireBillingWriteAccess();
+  if (!billing.ok) return billing;
 
   const user = await getCurrentUser();
   if (!user) return { ok: false, error: "Tu sesión expiró." };
@@ -294,16 +316,34 @@ export async function registerMovement(
     }
   }
 
-  const { error } = await supabase.from("revolving_movements").insert({
-    account_id: value.accountId,
-    user_id: user.id,
-    kind: value.kind,
-    amount: money(value.amount),
-    movement_date: value.movementDate,
-    description: value.description?.trim() || null,
-  });
+  const receipt = await uploadReceipt(
+    supabase,
+    user.id,
+    "cards",
+    value.accountId,
+    receiptFile(receiptData),
+  );
 
-  if (error) return { ok: false, error: error.message };
+  const { data: movement, error } = await supabase
+    .from("revolving_movements")
+    .insert({
+      account_id: value.accountId,
+      user_id: user.id,
+      kind: value.kind,
+      amount: money(value.amount),
+      movement_date: value.movementDate,
+      description: value.description?.trim() || null,
+      installment_count: value.kind === "charge" ? value.installmentCount : 1,
+      installments_paid: 0,
+      ...(receipt ?? {}),
+    })
+    .select("id")
+    .single();
+
+  if (error || !movement) {
+    await removeReceipt(supabase, receipt?.receipt_path);
+    return { ok: false, error: error?.message ?? "No pudimos registrar el movimiento." };
+  }
 
   const delta = value.kind === "payment" ? -value.amount : value.amount;
   const newBalance = money(Math.max(0, balance + delta));
@@ -312,12 +352,18 @@ export async function registerMovement(
     user_id: user.id,
     credit_id: null,
     payment_id: null,
+    revolving_movement_id: movement.id,
     type: value.kind === "payment" ? "payment" : "credit_updated",
     title: `${MOVEMENT_LABEL[value.kind]} · ${summary.name}`,
     description: value.description?.trim() || null,
     amount: money(value.amount),
     occurred_at: new Date(`${value.movementDate}T12:00:00Z`).toISOString(),
-    metadata: { revolving_account: value.accountId, kind: value.kind },
+    metadata: {
+      revolving_account: value.accountId,
+      kind: value.kind,
+      installment_count: value.kind === "charge" ? value.installmentCount : 1,
+      has_receipt: Boolean(receipt),
+    },
   });
 
   revalidateRevolving(value.accountId);
@@ -347,7 +393,7 @@ export async function deleteMovement(
   const supabase = await createClient();
   const { data: movement } = await supabase
     .from("revolving_movements")
-    .select("account_id")
+    .select("account_id, receipt_path")
     .eq("id", movementId)
     .maybeSingle();
 
@@ -359,6 +405,8 @@ export async function deleteMovement(
     .eq("id", movementId);
 
   if (error) return { ok: false, error: error.message };
+
+  await removeReceipt(supabase, movement.receipt_path);
 
   revalidateRevolving(movement.account_id);
   return { ok: true, data: undefined };
@@ -405,6 +453,9 @@ export async function registerStatement(
       error: "El mínimo no puede ser mayor que el total a pagar.",
     };
   }
+
+  const billing = await requireBillingWriteAccess();
+  if (!billing.ok) return billing;
 
   const user = await getCurrentUser();
   if (!user) return { ok: false, error: "Tu sesión expiró." };

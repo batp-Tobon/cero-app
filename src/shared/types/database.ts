@@ -32,6 +32,29 @@ export type RevolvingKindDB = "credit_card" | "credit_line";
 export type RevolvingStatusDB = "active" | "closed";
 export type StatementStatusDB = "open" | "paid" | "overdue";
 export type MovementKindDB = "charge" | "payment" | "interest" | "fee";
+export type BudgetExpenseCategoryDB =
+  | "housing"
+  | "food"
+  | "utilities"
+  | "transport"
+  | "health"
+  | "education"
+  | "family"
+  | "leisure"
+  | "other";
+export type SaasSubscriptionStatusDB =
+  | "trialing"
+  | "active"
+  | "past_due"
+  | "canceled"
+  | "expired";
+export type SaasBillingIntervalDB = "month" | "year" | "one_time";
+export type SaasPaymentStatusDB =
+  | "pending"
+  | "succeeded"
+  | "failed"
+  | "refunded"
+  | "canceled";
 export type InstallmentStatusDB = "pending" | "partial" | "paid";
 export type ExtraPrincipalModeDB = "reduce_term" | "reduce_installment";
 export type ActivityTypeDB =
@@ -106,8 +129,13 @@ export type PaymentRow = {
   principal_paid: number;
   interest_paid: number;
   extra_principal: number;
+  other_paid: number;
   balance_after: number | null;
   notes: string | null;
+  receipt_path: string | null;
+  receipt_name: string | null;
+  receipt_mime: string | null;
+  receipt_size: number | null;
   created_at: string;
 }
 
@@ -116,6 +144,7 @@ export type ActivityRow = {
   user_id: string;
   credit_id: string | null;
   payment_id: string | null;
+  revolving_movement_id: string | null;
   type: ActivityTypeDB;
   title: string;
   description: string | null;
@@ -187,8 +216,213 @@ export type RevolvingMovementRow = {
   amount: number;
   movement_date: string;
   description: string | null;
+  installment_count: number;
+  installments_paid: number;
+  receipt_path: string | null;
+  receipt_name: string | null;
+  receipt_mime: string | null;
+  receipt_size: number | null;
   created_at: string;
 }
+
+export type MonthlyBudgetRow = {
+  id: string;
+  user_id: string;
+  month: string;
+  income_amount: number;
+  currency: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export type BudgetIncomeRow = {
+  id: string;
+  budget_id: string;
+  user_id: string;
+  month: string;
+  name: string;
+  amount: number;
+  received_date: string;
+  recurring: boolean;
+  position: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type BudgetExpenseRow = {
+  id: string;
+  budget_id: string;
+  user_id: string;
+  name: string;
+  category: BudgetExpenseCategoryDB;
+  amount: number;
+  due_day: number;
+  recurring: boolean;
+  position: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export type SaasPlanRow = {
+  id: string;
+  code: string;
+  name: string;
+  description: string | null;
+  features: Record<string, boolean | number | string | null>;
+  is_active: boolean;
+  is_public: boolean;
+  sort_order: number;
+  trial_days: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type SaasPriceRow = {
+  id: string;
+  plan_id: string;
+  currency: string;
+  amount: number;
+  billing_interval: SaasBillingIntervalDB;
+  interval_count: number;
+  provider: string | null;
+  provider_price_id: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+export type SaasSubscriptionRow = {
+  id: string;
+  user_id: string;
+  plan_id: string;
+  price_id: string | null;
+  status: SaasSubscriptionStatusDB;
+  provider: string;
+  provider_customer_id: string | null;
+  provider_subscription_id: string | null;
+  starts_at: string;
+  trial_ends_at: string | null;
+  current_period_start: string | null;
+  current_period_end: string | null;
+  grace_ends_at: string | null;
+  cancel_at_period_end: boolean;
+  canceled_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type SaasSubscriptionEventRow = {
+  id: string;
+  subscription_id: string;
+  user_id: string;
+  actor_user_id: string | null;
+  event_type: string;
+  source: string;
+  reason: string | null;
+  before_state: Record<string, unknown>;
+  after_state: Record<string, unknown>;
+  external_event_id: string | null;
+  occurred_at: string;
+};
+
+export type SaasBillingPaymentRow = {
+  id: string;
+  subscription_id: string | null;
+  user_id: string;
+  price_id: string | null;
+  status: SaasPaymentStatusDB;
+  provider: string;
+  provider_payment_id: string | null;
+  idempotency_key: string | null;
+  amount: number;
+  currency: string;
+  paid_at: string | null;
+  refunded_at: string | null;
+  failure_code: string | null;
+  failure_message: string | null;
+  submitted_reference: string | null;
+  proof_path: string | null;
+  proof_name: string | null;
+  proof_mime: string | null;
+  proof_size: number | null;
+  reviewed_at: string | null;
+  reviewed_by: string | null;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+};
+
+export type CurrentBillingContextRow = {
+  is_admin: boolean;
+  free_plan_code: string;
+  free_plan_features: Record<string, boolean | number | string | null>;
+  subscription_status: SaasSubscriptionStatusDB | null;
+  subscription_plan_code: string | null;
+  subscription_plan_features: Record<string, boolean | number | string | null> | null;
+  trial_ends_at: string | null;
+  current_period_end: string | null;
+  grace_ends_at: string | null;
+};
+
+export type CurrentDashboardSnapshotRow = {
+  profile: Pick<ProfileRow, "full_name" | "avatar_url" | "role"> | null;
+  credits: CreditSummaryRow[];
+  cards: RevolvingSummaryRow[];
+  billing: CurrentBillingContextRow | null;
+};
+
+export type CurrentSubscriptionSnapshotRow = {
+  offer: { plan: SaasPlanRow; price: SaasPriceRow } | null;
+  billing: CurrentBillingContextRow | null;
+  payments: SaasBillingPaymentRow[];
+};
+
+export type SaasWebhookEventRow = {
+  id: string;
+  provider: string;
+  event_id: string;
+  event_type: string;
+  payload_sha256: string;
+  status: "received" | "processed" | "ignored" | "failed";
+  attempts: number;
+  last_error: string | null;
+  received_at: string;
+  processed_at: string | null;
+};
+
+export type SaasUsageCounterRow = {
+  user_id: string;
+  metric: string;
+  period_start: string;
+  period_end: string;
+  used: number;
+  included: number;
+  updated_at: string;
+};
+
+export type AdminAuditLogRow = {
+  id: string;
+  actor_user_id: string;
+  action: string;
+  target_type: string;
+  target_id: string | null;
+  reason: string;
+  before_state: Record<string, unknown>;
+  after_state: Record<string, unknown>;
+  metadata: Record<string, unknown>;
+  created_at: string;
+};
+
+export type AdminBillingMetricsRow = {
+  total_users: number;
+  total_admins: number;
+  active_subscriptions: number;
+  trial_subscriptions: number;
+  past_due_subscriptions: number;
+  revenue_30_days: number;
+  failed_payments_30_days: number;
+  audit_events_30_days: number;
+};
 
 /** Vista `revolving_summary` — saldo, disponible y extracto vigente. */
 export type RevolvingSummaryRow = {
@@ -309,9 +543,14 @@ export type Database = {
           | "principal_paid"
           | "interest_paid"
           | "extra_principal"
+          | "other_paid"
           | "amount_paid"
           | "balance_after"
           | "notes"
+          | "receipt_path"
+          | "receipt_name"
+          | "receipt_mime"
+          | "receipt_size"
         >
       >;
       activity: Table<
@@ -326,6 +565,7 @@ export type Database = {
           | "amount"
           | "credit_id"
           | "payment_id"
+          | "revolving_movement_id"
         >
       >;
       credit_members: Table<
@@ -366,7 +606,131 @@ export type Database = {
         RevolvingMovementRow,
         Insertable<
           RevolvingMovementRow,
-          "id" | "created_at" | "statement_id" | "movement_date" | "description"
+          | "id"
+          | "created_at"
+          | "statement_id"
+          | "movement_date"
+          | "description"
+          | "installment_count"
+          | "installments_paid"
+          | "receipt_path"
+          | "receipt_name"
+          | "receipt_mime"
+          | "receipt_size"
+        >
+      >;
+      monthly_budgets: Table<
+        MonthlyBudgetRow,
+        Insertable<
+          MonthlyBudgetRow,
+          Generated | "income_amount" | "currency"
+        >
+      >;
+      budget_incomes: Table<
+        BudgetIncomeRow,
+        Insertable<
+          BudgetIncomeRow,
+          Generated | "recurring" | "position"
+        >
+      >;
+      budget_expenses: Table<
+        BudgetExpenseRow,
+        Insertable<
+          BudgetExpenseRow,
+          Generated | "category" | "due_day" | "recurring" | "position"
+        >
+      >;
+      saas_plans: Table<
+        SaasPlanRow,
+        Insertable<
+          SaasPlanRow,
+          | Generated
+          | "description"
+          | "features"
+          | "is_active"
+          | "is_public"
+          | "sort_order"
+          | "trial_days"
+        >
+      >;
+      saas_prices: Table<
+        SaasPriceRow,
+        Insertable<
+          SaasPriceRow,
+          Generated | "provider" | "provider_price_id" | "is_active" | "interval_count"
+        >
+      >;
+      saas_subscriptions: Table<
+        SaasSubscriptionRow,
+        Insertable<
+          SaasSubscriptionRow,
+          | Generated
+          | "price_id"
+          | "provider"
+          | "provider_customer_id"
+          | "provider_subscription_id"
+          | "starts_at"
+          | "trial_ends_at"
+          | "current_period_start"
+          | "current_period_end"
+          | "grace_ends_at"
+          | "cancel_at_period_end"
+          | "canceled_at"
+        >
+      >;
+      saas_subscription_events: Table<
+        SaasSubscriptionEventRow,
+        Insertable<
+          SaasSubscriptionEventRow,
+          | "id"
+          | "actor_user_id"
+          | "reason"
+          | "before_state"
+          | "after_state"
+          | "external_event_id"
+          | "occurred_at"
+        >
+      >;
+      saas_billing_payments: Table<
+        SaasBillingPaymentRow,
+        Insertable<
+          SaasBillingPaymentRow,
+          | Generated
+          | "subscription_id"
+          | "price_id"
+          | "status"
+          | "provider_payment_id"
+          | "idempotency_key"
+          | "paid_at"
+          | "refunded_at"
+          | "failure_code"
+          | "failure_message"
+          | "submitted_reference"
+          | "proof_path"
+          | "proof_name"
+          | "proof_mime"
+          | "proof_size"
+          | "reviewed_at"
+          | "reviewed_by"
+          | "metadata"
+        >
+      >;
+      saas_webhook_events: Table<
+        SaasWebhookEventRow,
+        Insertable<
+          SaasWebhookEventRow,
+          "id" | "status" | "attempts" | "last_error" | "received_at" | "processed_at"
+        >
+      >;
+      saas_usage_counters: Table<
+        SaasUsageCounterRow,
+        Insertable<SaasUsageCounterRow, "used" | "updated_at">
+      >;
+      admin_audit_log: Table<
+        AdminAuditLogRow,
+        Insertable<
+          AdminAuditLogRow,
+          "id" | "target_id" | "before_state" | "after_state" | "metadata" | "created_at"
         >
       >;
       notifications: Table<
@@ -382,14 +746,89 @@ export type Database = {
       revolving_summary: { Row: RevolvingSummaryRow; Relationships: [] };
     };
     Functions: {
-      owns_credit: { Args: { p_credit_id: string }; Returns: boolean };
-      can_access_credit: { Args: { p_credit_id: string }; Returns: boolean };
-      is_credit_member: { Args: { p_credit_id: string }; Returns: boolean };
-      owns_revolving: { Args: { p_account_id: string }; Returns: boolean };
-      is_admin: { Args: Record<string, never>; Returns: boolean };
+      save_monthly_budget: {
+        Args: {
+          p_month: string;
+          p_income_amount: number;
+          p_currency: string;
+          p_expenses: unknown;
+        };
+        Returns: string;
+      };
+      save_monthly_budget_v2: {
+        Args: {
+          p_month: string;
+          p_currency: string;
+          p_incomes: unknown;
+          p_expenses: unknown;
+        };
+        Returns: string;
+      };
       find_profile_by_email: {
         Args: { p_email: string };
         Returns: { id: string; full_name: string | null; email: string | null }[];
+      };
+      admin_set_user_role: {
+        Args: { p_user_id: string; p_role: UserRoleDB; p_reason: string };
+        Returns: undefined;
+      };
+      admin_set_subscription: {
+        Args: {
+          p_user_id: string;
+          p_plan_id: string;
+          p_status: SaasSubscriptionStatusDB;
+          p_access_until: string | null;
+          p_reason: string;
+        };
+        Returns: string;
+      };
+      admin_update_plan: {
+        Args: {
+          p_plan_id: string;
+          p_name: string;
+          p_description: string | null;
+          p_trial_days: number;
+          p_is_public: boolean;
+          p_ai_insights: boolean;
+          p_monthly_price: number;
+          p_reason: string;
+        };
+        Returns: undefined;
+      };
+      admin_billing_metrics: {
+        Args: Record<string, never>;
+        Returns: AdminBillingMetricsRow[];
+      };
+      current_billing_context: {
+        Args: Record<string, never>;
+        Returns: CurrentBillingContextRow[];
+      };
+      current_dashboard_snapshot: {
+        Args: Record<string, never>;
+        Returns: CurrentDashboardSnapshotRow;
+      };
+      current_subscription_snapshot: {
+        Args: Record<string, never>;
+        Returns: CurrentSubscriptionSnapshotRow;
+      };
+      process_wompi_saas_payment: {
+        Args: {
+          p_reference: string;
+          p_provider_payment_id: string;
+          p_external_event_id: string;
+          p_amount: number;
+          p_currency: string;
+          p_paid_at: string;
+        };
+        Returns: string;
+      };
+      admin_review_saas_payment: {
+        Args: {
+          p_payment_id: string;
+          p_approve: boolean;
+          p_reason: string;
+        };
+        Returns: string | null;
       };
     };
     Enums: {
@@ -405,6 +844,10 @@ export type Database = {
       revolving_status: RevolvingStatusDB;
       statement_status: StatementStatusDB;
       movement_kind: MovementKindDB;
+      budget_expense_category: BudgetExpenseCategoryDB;
+      saas_subscription_status: SaasSubscriptionStatusDB;
+      saas_billing_interval: SaasBillingIntervalDB;
+      saas_payment_status: SaasPaymentStatusDB;
     };
     CompositeTypes: Record<string, never>;
   };

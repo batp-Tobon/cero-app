@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createClient, getCurrentUser } from "@/infrastructure/supabase/server";
 import { rebuildCreditSchedule } from "@/features/credits/schedule";
+import { requireBillingWriteAccess } from "@/features/billing/access";
 import { creditTypeLabel } from "@/shared/lib/constants";
 import { formatMoney } from "@/shared/lib/format";
 import type { ActionResult } from "@/shared/types/domain";
@@ -57,6 +58,9 @@ export async function createCredit(
     return { ok: false, error: parsed.error.issues[0].message };
   }
   const value = parsed.data;
+
+  const billing = await requireBillingWriteAccess();
+  if (!billing.ok) return billing;
 
   const user = await getCurrentUser();
   if (!user) return { ok: false, error: "Tu sesión expiró." };
@@ -166,6 +170,9 @@ export async function updateCredit(
     return { ok: false, error: parsed.error.issues[0].message };
   }
   const value = parsed.data;
+
+  const billing = await requireBillingWriteAccess();
+  if (!billing.ok) return billing;
 
   const user = await getCurrentUser();
   if (!user) return { ok: false, error: "Tu sesión expiró." };

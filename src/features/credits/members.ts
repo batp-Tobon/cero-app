@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createClient, getCurrentUser } from "@/infrastructure/supabase/server";
+import { requireBillingWriteAccess } from "@/features/billing/access";
 import type { ActionResult } from "@/shared/types/domain";
 
 export interface CreditMember {
@@ -108,6 +109,9 @@ export async function shareCredit(
     return { ok: false, error: parsed.error.issues[0].message };
   }
   const { creditId, email } = parsed.data;
+
+  const billing = await requireBillingWriteAccess();
+  if (!billing.ok) return billing;
 
   const user = await getCurrentUser();
   if (!user) return { ok: false, error: "Tu sesión expiró." };

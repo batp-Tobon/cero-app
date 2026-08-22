@@ -10,8 +10,11 @@ const PROTECTED_PREFIXES = [
   "/tarjetas",
   "/admin",
   "/creditos",
+  "/presupuesto",
   "/actividad",
+  "/ia",
   "/perfil",
+  "/suscripcion",
   "/api/export",
 ];
 const AUTH_PAGES = [
@@ -29,6 +32,14 @@ export async function updateSession(request: NextRequest) {
   let response = NextResponse.next({ request });
 
   if (!isSupabaseConfigured()) return response;
+
+  const path = request.nextUrl.pathname;
+  const isProtected = PROTECTED_PREFIXES.some((p) => path.startsWith(p));
+  const isAuthPage = AUTH_PAGES.some((p) => path.startsWith(p));
+
+  // El resto de rutas no necesita tocar Auth. Esto también evita trabajo
+  // innecesario en webhooks, páginas públicas y respuestas de infraestructura.
+  if (!isProtected && !isAuthPage) return response;
 
   const supabase = createServerClient<Database>(
     env.supabaseUrl,
@@ -51,13 +62,10 @@ export async function updateSession(request: NextRequest) {
     },
   );
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  const path = request.nextUrl.pathname;
-  const isProtected = PROTECTED_PREFIXES.some((p) => path.startsWith(p));
-  const isAuthPage = AUTH_PAGES.some((p) => path.startsWith(p));
+  // Verifica firma y expiración localmente con JWKS cacheado. A diferencia de
+  // getUser(), no hace una petición de red por cada cambio de pantalla.
+  const { data, error } = await supabase.auth.getClaims();
+  const user = !error && data?.claims?.sub ? data.claims : null;
 
   if (!user && isProtected) {
     const url = request.nextUrl.clone();

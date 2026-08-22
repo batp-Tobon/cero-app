@@ -5,107 +5,189 @@ import { z } from "zod";
 import {
   createClient,
   getCurrentProfile,
-  getCurrentUser,
 } from "@/infrastructure/supabase/server";
-import { loadCredit, rebuildCreditSchedule } from "@/features/credits/schedule";
 import type { ActionResult } from "@/shared/types/domain";
+
+const reason = z
+  .string()
+  .trim()
+  .min(10, "Escribe un motivo de al menos 10 caracteres.")
+  .max(500, "El motivo es demasiado largo.");
 
 const roleSchema = z.object({
   userId: z.string().uuid(),
   role: z.enum(["user", "admin"]),
+  reason,
 });
 
-/**
- * Cambia el rol de un usuario.
- *
- * La comprobación de verdad está en Postgres: el trigger `guard_role_change`
- * rechaza el cambio si quien lo pide no es admin, incluso llamando a la API
- * por fuera de la aplicación. Aquí sólo se traduce el fallo a algo legible.
- */
+const subscriptionSchema = z.object({
+  userId: z.string().uuid(),
+  planId: z.string().uuid(),
+  status: z.enum(["trialing", "active", "past_due", "canceled", "expired"]),
+  accessUntil: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .nullable(),
+  reason,
+});
+
+const planSchema = z.object({
+  planId: z.string().uuid(),
+  name: z.string().trim().min(1).max(80),
+  description: z.string().trim().max(500).nullable(),
+  trialDays: z.number().int().min(0).max(90),
+  isPublic: z.boolean(),
+  aiInsights: z.boolean(),
+  monthlyPrice: z.number().min(0).max(999_999_999_999.99),
+  reason,
+});
+
+const paymentReviewSchema = z.object({
+  paymentId: z.string().uuid(),
+  approve: z.boolean(),
+  reason,
+});
+
+async function requireAdmin(): Promise<ActionResult> {
+  const profile = await getCurrentProfile();
+  if (!profile) return { ok: false, error: "Tu sesión expiró." };
+  if (profile.role !== "admin") {
+    return { ok: false, error: "Necesitas permisos de administrador." };
+  }
+  return { ok: true, data: undefined };
+}
+
+function readableAdminError(message: string): string {
+  if (message.includes("last administrator")) {
+    return "No puedes quitar el último administrador.";
+  }
+  if (message.includes("future trial")) {
+    return "La prueba necesita una fecha de finalización futura.";
+  }
+  if (message.includes("future subscription")) {
+    return "La suscripción necesita una fecha de finalización futura.";
+  }
+  if (message.includes("future grace")) {
+    return "El periodo de gracia necesita una fecha futura.";
+  }
+  if (message.includes("Active plan not found")) {
+    return "Ese plan ya no está disponible.";
+  }
+  if (message.includes("already reviewed")) {
+    return "Ese pago ya fue revisado.";
+  }
+  return "No pudimos completar el cambio. Inténtalo nuevamente.";
+}
+
+export async function reviewSaasPayment(
+  input: z.input<typeof paymentReviewSchema>,
+): Promise<ActionResult> {
+  const parsed = paymentReviewSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "Datos no válidos." };
+  }
+
+  const allowed = await requireAdmin();
+  if (!allowed.ok) return allowed;
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("admin_review_saas_payment", {
+    p_payment_id: parsed.data.paymentId,
+    p_approve: parsed.data.approve,
+    p_reason: parsed.data.reason,
+  });
+  if (error) return { ok: false, error: readableAdminError(error.message) };
+
+  revalidatePath("/admin");
+  revalidatePath("/suscripcion");
+  revalidatePath("/inicio");
+  return { ok: true, data: undefined };
+}
+
 export async function setUserRole(
   input: z.input<typeof roleSchema>,
 ): Promise<ActionResult> {
   const parsed = roleSchema.safeParse(input);
-  if (!parsed.success) return { ok: false, error: "Datos no válidos." };
-  const { userId, role } = parsed.data;
-
-  const me = await getCurrentProfile();
-  if (!me) return { ok: false, error: "Tu sesión expiró." };
-  if (me.role !== "admin") {
-    return { ok: false, error: "Necesitas permisos de administrador." };
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "Datos no válidos." };
   }
+
+  const allowed = await requireAdmin();
+  if (!allowed.ok) return allowed;
 
   const supabase = await createClient();
+  const { error } = await supabase.rpc("admin_set_user_role", {
+    p_user_id: parsed.data.userId,
+    p_role: parsed.data.role,
+    p_reason: parsed.data.reason,
+  });
 
-  // Quedarse sin administradores dejaría el backoffice inaccesible para todos.
-  if (role === "user") {
-    const { count } = await supabase
-      .from("profiles")
-      .select("id", { count: "exact", head: true })
-      .eq("role", "admin");
-
-    if ((count ?? 0) <= 1) {
-      return {
-        ok: false,
-        error: "No puedes quitar el último administrador que queda.",
-      };
-    }
-  }
-
-  const { error } = await supabase
-    .from("profiles")
-    .update({ role })
-    .eq("id", userId);
-
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: readableAdminError(error.message) };
 
   revalidatePath("/admin");
   return { ok: true, data: undefined };
 }
 
-/**
- * Vuelve a derivar el plan de pagos de un crédito desde su historial.
- *
- * Es la herramienta de reparación del backoffice: sirve tras cargar
- * movimientos por fuera de la aplicación, o si alguna escritura quedó a medias
- * y el plan dejó de cuadrar con los pagos.
- */
-export async function rebuildCreditPlan(
-  creditId: string,
-): Promise<ActionResult<{ balance: number; installmentsLeft: number }>> {
-  const me = await getCurrentProfile();
-  if (!me) return { ok: false, error: "Tu sesión expiró." };
+export async function setUserSubscription(
+  input: z.input<typeof subscriptionSchema>,
+): Promise<ActionResult<{ subscriptionId: string }>> {
+  const parsed = subscriptionSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "Datos no válidos." };
+  }
 
-  const user = await getCurrentUser();
+  const allowed = await requireAdmin();
+  if (!allowed.ok) return allowed;
+
+  const accessUntil = parsed.data.accessUntil
+    ? `${parsed.data.accessUntil}T23:59:59.999Z`
+    : null;
   const supabase = await createClient();
+  const { data, error } = await supabase.rpc("admin_set_subscription", {
+    p_user_id: parsed.data.userId,
+    p_plan_id: parsed.data.planId,
+    p_status: parsed.data.status,
+    p_access_until: accessUntil,
+    p_reason: parsed.data.reason,
+  });
 
-  try {
-    const credit = await loadCredit(supabase, creditId);
-    if (!credit) return { ok: false, error: "No encontramos ese crédito." };
+  if (error) return { ok: false, error: readableAdminError(error.message) };
 
-    // Un admin puede reparar cualquier crédito; el resto, sólo el suyo.
-    if (me.role !== "admin" && credit.owner_id !== user?.id) {
-      return { ok: false, error: "No puedes reconstruir ese crédito." };
-    }
+  revalidatePath("/admin");
+  return { ok: true, data: { subscriptionId: data } };
+}
 
-    const result = await rebuildCreditSchedule(supabase, credit);
-
-    revalidatePath("/admin");
-    revalidatePath(`/creditos/${creditId}`);
-    revalidatePath("/creditos");
-    revalidatePath("/inicio");
-
-    return {
-      ok: true,
-      data: {
-        balance: result.balance,
-        installmentsLeft: result.installmentsLeft,
-      },
-    };
-  } catch (e) {
+export async function updatePlanSettings(
+  input: z.input<typeof planSchema>,
+): Promise<ActionResult> {
+  const parsed = planSchema.safeParse(input);
+  if (!parsed.success) {
     return {
       ok: false,
-      error: e instanceof Error ? e.message : "No pudimos reconstruir el plan.",
+      error: parsed.error.issues[0]?.message ?? "Datos no válidos.",
     };
   }
+
+  const allowed = await requireAdmin();
+  if (!allowed.ok) return allowed;
+
+  const value = parsed.data;
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("admin_update_plan", {
+    p_plan_id: value.planId,
+    p_name: value.name,
+    p_description: value.description,
+    p_trial_days: value.trialDays,
+    p_is_public: value.isPublic,
+    p_ai_insights: value.aiInsights,
+    p_monthly_price: value.monthlyPrice,
+    p_reason: value.reason,
+  });
+
+  if (error) return { ok: false, error: readableAdminError(error.message) };
+
+  revalidatePath("/admin");
+  revalidatePath("/inicio");
+  revalidatePath("/ia");
+  return { ok: true, data: undefined };
 }

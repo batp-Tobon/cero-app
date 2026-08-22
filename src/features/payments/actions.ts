@@ -10,8 +10,13 @@ import {
 } from "@/features/credits/schedule";
 import { money } from "@/core/money";
 import { formatMoney } from "@/shared/lib/format";
+import {
+  removeReceipt,
+  uploadReceipt,
+} from "@/features/receipts/server";
 import type { ActionResult } from "@/shared/types/domain";
 import type { CreditRow } from "@/shared/types/database";
+import { requireBillingWriteAccess } from "@/features/billing/access";
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -23,6 +28,12 @@ function revalidateCredit(creditId: string) {
   revalidatePath("/creditos");
   revalidatePath(`/creditos/${creditId}`);
   revalidatePath("/actividad");
+  revalidatePath("/presupuesto");
+}
+
+function receiptFile(data?: FormData): File | null {
+  const value = data?.get("receipt");
+  return value instanceof File && value.size > 0 ? value : null;
 }
 
 /** Saldo vivo actual: el saldo inicial de la primera cuota sin pagar. */
@@ -99,12 +110,16 @@ interface PaymentResultData {
  */
 export async function registerPayment(
   input: PaymentInput,
+  receiptData?: FormData,
 ): Promise<ActionResult<PaymentResultData>> {
   const parsed = paymentSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0].message };
   }
   const value = parsed.data;
+
+  const billing = await requireBillingWriteAccess();
+  if (!billing.ok) return billing;
 
   const user = await getCurrentUser();
   if (!user) return { ok: false, error: "Tu sesión expiró." };
@@ -149,6 +164,14 @@ export async function registerPayment(
       return { ok: false, error: "Ese pago ya se acaba de registrar." };
     }
 
+    const receipt = await uploadReceipt(
+      supabase,
+      user.id,
+      "credits",
+      credit.id,
+      receiptFile(receiptData),
+    );
+
     const { data: payment, error } = await supabase
       .from("payments")
       .insert({
@@ -162,11 +185,15 @@ export async function registerPayment(
         extra_principal: money(value.extraPrincipal),
         balance_after: null,
         notes: value.notes?.trim() || null,
+        ...(receipt ?? {}),
       })
       .select("id")
       .single();
 
-    if (error) return { ok: false, error: error.message };
+    if (error) {
+      await removeReceipt(supabase, receipt?.receipt_path);
+      return { ok: false, error: error.message };
+    }
 
     const result = await rebuildCreditSchedule(supabase, credit);
 
@@ -179,7 +206,11 @@ export async function registerPayment(
       description: credit.name,
       amount: money(value.amountPaid + value.extraPrincipal),
       occurred_at: new Date(`${value.paymentDate}T12:00:00Z`).toISOString(),
-      metadata: { installment, balance_after: result.balance },
+      metadata: {
+        installment,
+        balance_after: result.balance,
+        has_receipt: Boolean(receipt),
+      },
     });
 
     if (result.settled) {
@@ -232,12 +263,16 @@ interface ExtraPrincipalResultData {
 /** Registra un abono extraordinario a capital y recalcula el plan. */
 export async function registerExtraPrincipal(
   input: ExtraPrincipalInput,
+  receiptData?: FormData,
 ): Promise<ActionResult<ExtraPrincipalResultData>> {
   const parsed = extraSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0].message };
   }
   const value = parsed.data;
+
+  const billing = await requireBillingWriteAccess();
+  if (!billing.ok) return billing;
 
   const user = await getCurrentUser();
   if (!user) return { ok: false, error: "Tu sesión expiró." };
@@ -277,6 +312,14 @@ export async function registerExtraPrincipal(
       .neq("status", "paid");
     const pendingBefore = count ?? 0;
 
+    const receipt = await uploadReceipt(
+      supabase,
+      user.id,
+      "credits",
+      credit.id,
+      receiptFile(receiptData),
+    );
+
     const { data: payment, error } = await supabase
       .from("payments")
       .insert({
@@ -290,11 +333,15 @@ export async function registerExtraPrincipal(
         extra_principal: money(value.amount),
         balance_after: null,
         notes: value.notes?.trim() || null,
+        ...(receipt ?? {}),
       })
       .select("id")
       .single();
 
-    if (error) return { ok: false, error: error.message };
+    if (error) {
+      await removeReceipt(supabase, receipt?.receipt_path);
+      return { ok: false, error: error.message };
+    }
 
     const result = await rebuildCreditSchedule(supabase, credit);
     const installmentsSaved = Math.max(
@@ -315,6 +362,7 @@ export async function registerExtraPrincipal(
         balance_after: result.balance,
         installments_saved: installmentsSaved,
         mode: credit.extra_principal_mode,
+        has_receipt: Boolean(receipt),
       },
     });
 
@@ -356,6 +404,7 @@ type EditPaymentInput = z.input<typeof editSchema>;
  */
 export async function updatePayment(
   input: EditPaymentInput,
+  receiptData?: FormData,
 ): Promise<ActionResult<RebuildResult>> {
   const parsed = editSchema.safeParse(input);
   if (!parsed.success) {
@@ -367,6 +416,9 @@ export async function updatePayment(
     return { ok: false, error: "El movimiento debe tener algún importe." };
   }
 
+  const billing = await requireBillingWriteAccess();
+  if (!billing.ok) return billing;
+
   const user = await getCurrentUser();
   if (!user) return { ok: false, error: "Tu sesión expiró." };
 
@@ -375,7 +427,7 @@ export async function updatePayment(
   try {
     const { data: existing, error: loadError } = await supabase
       .from("payments")
-      .select("id, credit_id")
+      .select("id, credit_id, receipt_path")
       .eq("id", value.paymentId)
       .maybeSingle();
     if (loadError) return { ok: false, error: loadError.message };
@@ -384,6 +436,14 @@ export async function updatePayment(
     const credit = await loadCredit(supabase, existing.credit_id);
     if (!credit) return { ok: false, error: "No encontramos ese crédito." };
 
+    const receipt = await uploadReceipt(
+      supabase,
+      user.id,
+      "credits",
+      credit.id,
+      receiptFile(receiptData),
+    );
+
     const { error } = await supabase
       .from("payments")
       .update({
@@ -391,9 +451,17 @@ export async function updatePayment(
         amount_paid: money(value.amountPaid),
         extra_principal: money(value.extraPrincipal),
         notes: value.notes?.trim() || null,
+        ...(receipt ?? {}),
       })
       .eq("id", value.paymentId);
-    if (error) return { ok: false, error: error.message };
+    if (error) {
+      await removeReceipt(supabase, receipt?.receipt_path);
+      return { ok: false, error: error.message };
+    }
+
+    if (receipt && existing.receipt_path !== receipt.receipt_path) {
+      await removeReceipt(supabase, existing.receipt_path);
+    }
 
     const result = await rebuildCreditSchedule(supabase, credit);
 
@@ -427,7 +495,7 @@ export async function deletePayment(
   try {
     const { data: existing, error: loadError } = await supabase
       .from("payments")
-      .select("id, credit_id, amount_paid, extra_principal")
+      .select("id, credit_id, amount_paid, extra_principal, other_paid, receipt_path")
       .eq("id", paymentId)
       .maybeSingle();
     if (loadError) return { ok: false, error: loadError.message };
@@ -446,6 +514,8 @@ export async function deletePayment(
       .eq("id", paymentId);
     if (error) return { ok: false, error: error.message };
 
+    await removeReceipt(supabase, existing.receipt_path);
+
     const result = await rebuildCreditSchedule(supabase, credit);
 
     await supabase.from("activity").insert({
@@ -456,7 +526,9 @@ export async function deletePayment(
       title: "Movimiento eliminado",
       description: credit.name,
       amount: money(
-        Number(existing.amount_paid) + Number(existing.extra_principal),
+        Number(existing.amount_paid) +
+          Number(existing.extra_principal) +
+          Number(existing.other_paid),
       ),
       metadata: { balance_after: result.balance },
     });

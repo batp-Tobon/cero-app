@@ -44,10 +44,8 @@ type SessionUser = { id: string; email: string | null };
  * publica del proyecto: 0,4 ms frente a los ~214 ms que costaba `getUser()`,
  * que va por red en cada pagina.
  *
- * La comprobacion autoritativa sigue estando: el middleware llama a `getUser()`
- * en cada request, y ahi es donde se detecta una sesion revocada y se refresca
- * el token. Aqui basta con confiar en una firma ya validada, porque esa peticion
- * no habria llegado hasta este punto sin pasar por el middleware.
+ * El middleware utiliza la misma verificación firmada. Una revocación remota
+ * se refleja al expirar el JWT; el cierre de sesión local borra las cookies.
  *
  * Y aunque llegara: las RLS filtran por `auth.uid()` en Postgres, asi que un
  * token invalido no devuelve datos de nadie.

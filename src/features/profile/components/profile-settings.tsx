@@ -13,6 +13,7 @@ import {
   LogOut,
   Shield,
   ShieldCheck,
+  Sparkles,
   UserRound,
   type LucideIcon,
 } from "lucide-react";
@@ -67,6 +68,12 @@ export function ProfileSettings({ profile }: { profile: Profile }) {
           label="Exportar datos"
           hint="CSV de créditos, cuotas y pagos"
           onClick={() => setPanel("export")}
+        />
+        <Row
+          icon={Sparkles}
+          label="Plan y pagos"
+          hint="Prueba, CERO Pro y comprobantes"
+          href="/suscripcion"
         />
         <Row
           icon={LifeBuoy}

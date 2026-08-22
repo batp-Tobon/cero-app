@@ -55,7 +55,9 @@ export function RegisterForm() {
       password,
       options: {
         data: { full_name: fullName.trim() },
-        emailRedirectTo: `${env.appUrl}/auth/callback`,
+        emailRedirectTo: `${env.appUrl}/auth/callback?next=${encodeURIComponent(
+          "/suscripcion?bienvenida=1",
+        )}`,
       },
     });
 
@@ -73,7 +75,7 @@ export function RegisterForm() {
       return;
     }
 
-    router.replace("/inicio");
+    router.replace("/suscripcion?bienvenida=1");
     router.refresh();
   }
 

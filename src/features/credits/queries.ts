@@ -12,6 +12,7 @@ import type {
   UpcomingPayment,
   UpcomingStatement,
   DebtSlice,
+  PaymentWithReceipt,
 } from "@/shared/types/domain";
 import type {
   ActivityRow,
@@ -21,6 +22,7 @@ import type {
   ScheduleRowDB,
 } from "@/shared/types/database";
 import { env } from "@/shared/lib/env";
+import { signReceiptPaths } from "@/features/receipts/server";
 
 /** Lo que queda por pagar del extracto vigente de una tarjeta. */
 function pendingStatement(account: RevolvingSummaryRow): number {
@@ -352,7 +354,7 @@ export async function getActivity(limit = 50): Promise<ActivityEntry[]> {
 export async function getCreditPayments(
   creditId: string,
   limit = 100,
-): Promise<PaymentRow[]> {
+): Promise<PaymentWithReceipt[]> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("payments")
@@ -363,5 +365,15 @@ export async function getCreditPayments(
     .limit(limit);
 
   if (error) throw new Error(error.message);
-  return data ?? [];
+  const rows = (data ?? []) as PaymentRow[];
+  const signed = await signReceiptPaths(
+    supabase,
+    rows.map((payment) => payment.receipt_path),
+  );
+  return rows.map((payment) => ({
+    ...payment,
+    receiptUrl: payment.receipt_path
+      ? (signed.get(payment.receipt_path) ?? null)
+      : null,
+  }));
 }

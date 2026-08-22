@@ -41,17 +41,23 @@ npm run dev
 | `NEXT_PUBLIC_APP_URL`           | URL pública, para los enlaces de Auth         |
 | `NEXT_PUBLIC_APP_TZ`            | Zona horaria de vencimientos                  |
 | `NEXT_PUBLIC_DEFAULT_CURRENCY`  | Moneda por defecto                            |
-| `SUPABASE_SERVICE_ROLE_KEY`     | **Sólo local**, para los scripts de seed      |
+| `NEXT_PUBLIC_PAYMENT_KEY`       | Llave Bre-B visible para los clientes         |
+| `NEXT_PUBLIC_WOMPI_PUBLIC_KEY`  | Llave pública del comercio Wompi              |
+| `WOMPI_INTEGRITY_SECRET`        | Firma del checkout, sólo servidor             |
+| `WOMPI_EVENTS_SECRET`           | Verificación del webhook, sólo servidor       |
+| `SUPABASE_SERVICE_ROLE_KEY`     | Webhook, pagos y scripts; sólo servidor        |
 
-`SUPABASE_SERVICE_ROLE_KEY` salta las RLS: nunca se importa desde `src/` ni se
-configura en Vercel.
+`SUPABASE_SERVICE_ROLE_KEY` salta las RLS: se configura en Vercel únicamente
+como secreto de servidor y sólo la consumen el webhook y acciones autenticadas.
+Ninguna de las tres variables secretas lleva prefijo `NEXT_PUBLIC_`.
 
 ### Base de datos
 
 Aplica las migraciones de `supabase/migrations/` **en orden** — ver
-[`supabase/README.md`](supabase/README.md). Son siete: esquema, RLS, vistas,
-roles y créditos compartidos, productos rotativos, plan derivado del historial
-y la función de búsqueda para compartir.
+[`supabase/README.md`](supabase/README.md). Cubren esquema, RLS, vistas, roles,
+créditos compartidos, productos rotativos, plan derivado del historial,
+apariencia, presupuesto mensual, comprobantes privados y la base comercial
+SaaS: prueba de 5 días, plan Pro editable, suscripciones, cobros y auditoría.
 
 ### El primer administrador
 
@@ -103,7 +109,7 @@ cada crédito para derivar el cronograma desde los movimientos cargados.
 src/
   app/                 rutas de Next.js — sólo componen, no deciden
   features/            un módulo por parte del producto (ver features/README.md)
-    auth/ credits/ payments/ revolving/
+    auth/ credits/ payments/ revolving/ receipts/ budget/ billing/ ai/
     dashboard/ activity/ profile/ admin/
   core/                motor de amortización y dinero — puro, sin dependencias
   shared/
@@ -158,6 +164,12 @@ fecha atrasada lo coloca donde de verdad ocurrió.
 **Las RLS no son opcional.** Cada tabla filtra por `auth.uid()` en Postgres. El
 filtro del frontend es comodidad, no seguridad.
 
+**Administrar no significa espiar.** El backoffice sólo alcanza perfiles,
+roles, planes, suscripciones, cobros SaaS y auditoría. Ni siquiera un
+administrador puede leer créditos, tarjetas, pagos, actividad o presupuestos
+privados de otro cliente. Cada cambio de rol o suscripción exige un motivo y se
+registra dentro de la misma transacción.
+
 ### Motor de amortización
 
 `src/core/domain/amortization.ts` — módulo puro, sin dependencias de red ni de
@@ -204,8 +216,9 @@ Las políticas RLS no se pueden validar razonando sobre el papel. `verify:rls`
 crea dos usuarios temporales, monta un escenario de pareja (un crédito
 compartido y uno privado cada uno) y comprueba contra la base real que cada uno
 ve lo suyo, que el invitado puede pagar pero no borrar, que nadie registra pagos
-a nombre de otro, que las tarjetas no se comparten y que un usuario no se puede
-ascender a admin. Borra todo lo que crea, incluso si falla.
+a nombre de otro, que los comprobantes privados respetan el acceso compartido,
+que las tarjetas no se comparten y que un usuario no puede ascenderse ni cambiar
+planes. Borra todo lo que crea, incluso si falla.
 
 ```bash
 npm run verify:rls
@@ -213,8 +226,11 @@ npm run verify:rls
 
 Necesita `SUPABASE_SERVICE_ROLE_KEY` en `.env.local`.
 
-52 tests sobre el motor: la cuota francesa, los cuatro sistemas, el encadenado
+77 tests sobre el dominio: la cuota francesa, los cuatro sistemas, el encadenado
 de saldos, el redondeo con centavos, el salto de meses cortos (31 ene → 28 feb),
 el reparto entre interés y capital, el recálculo tras un abono en sus dos modos
 y la reconstrucción del plan desde el historial — incluido borrar un pago
-intermedio y comprobar que los seis siguientes se renumeran sin descuadrar.
+intermedio y comprobar que los seis siguientes se renumeran sin descuadrar—,
+más el cálculo mensual de ingresos, gastos, pagos y déficit, las recomendaciones
+financieras, la firma real de comprobantes y las reglas de acceso para planes,
+pruebas, suscripciones, gracia y cancelación.

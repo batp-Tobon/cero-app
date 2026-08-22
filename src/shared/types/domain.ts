@@ -17,6 +17,7 @@ export type CreditType = CreditTypeDB;
 export type Profile = ProfileRow;
 export type Credit = CreditRow;
 export type Payment = PaymentRow;
+export type PaymentWithReceipt = PaymentRow & { receiptUrl: string | null };
 export type CreditSummary = CreditSummaryRow;
 
 /** Estado de una cuota tal y como se pinta en el plan de pagos. */

@@ -16,6 +16,7 @@ import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
 import { AmountField } from "@/shared/components/amount-field";
 import { InlineNotice } from "@/shared/components/states";
+import { ReceiptField } from "@/features/receipts/components/receipt-field";
 import { registerPayment } from "@/features/payments/actions";
 import { allocatePayment } from "@/core/amortization";
 import { formatMoney } from "@/shared/lib/format";
@@ -71,6 +72,7 @@ export function PaymentSheet({
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (pending) return;
+    const receiptData = new FormData(e.currentTarget as HTMLFormElement);
     setError(null);
     setPending(true);
 
@@ -79,7 +81,7 @@ export function PaymentSheet({
       paymentDate,
       amountPaid: amount,
       extraPrincipal: extra,
-    });
+    }, receiptData);
 
     if (!result.ok) {
       setError(result.error);
@@ -181,6 +183,8 @@ export function PaymentSheet({
               disabled={pending}
             />
           </div>
+
+          <ReceiptField id="payment-receipt" disabled={pending} />
 
           <dl className="space-y-2 rounded-2xl bg-secondary p-4">
             <div className="flex items-baseline justify-between gap-4 text-sm">

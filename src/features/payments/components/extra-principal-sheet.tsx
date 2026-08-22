@@ -16,6 +16,7 @@ import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
 import { AmountField } from "@/shared/components/amount-field";
 import { InlineNotice } from "@/shared/components/states";
+import { ReceiptField } from "@/features/receipts/components/receipt-field";
 import { registerExtraPrincipal } from "@/features/payments/actions";
 import { formatMoney } from "@/shared/lib/format";
 import { todayISO } from "@/shared/lib/dates";
@@ -68,6 +69,7 @@ export function ExtraPrincipalSheet({
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (pending) return;
+    const receiptData = new FormData(e.currentTarget as HTMLFormElement);
     setError(null);
     setPending(true);
 
@@ -75,7 +77,7 @@ export function ExtraPrincipalSheet({
       creditId,
       paymentDate,
       amount,
-    });
+    }, receiptData);
 
     if (!response.ok) {
       setError(response.error);
@@ -175,6 +177,8 @@ export function ExtraPrincipalSheet({
               Saldo pendiente: {formatMoney(balance, currency)}
             </p>
           </div>
+
+          <ReceiptField id="extra-receipt" disabled={pending} />
 
           <div className="rounded-2xl bg-secondary p-4">
             <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">

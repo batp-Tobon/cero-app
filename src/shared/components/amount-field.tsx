@@ -35,8 +35,8 @@ export function AmountField({
   return (
     <div
       className={cn(
-        "flex h-14 items-center gap-2 rounded-2xl border border-border bg-secondary px-4",
-        "focus-within:border-primary/60 focus-within:ring-2 focus-within:ring-ring/40",
+        "flex h-14 items-center gap-2 rounded-2xl border border-transparent bg-secondary px-4",
+        "transition-[border-color,box-shadow] focus-within:border-primary/60 focus-within:ring-2 focus-within:ring-primary/20",
         disabled && "opacity-50",
         className,
       )}
@@ -58,7 +58,7 @@ export function AmountField({
           onValueChange(parseAmountInput(e.target.value));
         }}
         onBlur={() => setDraft(null)}
-        className="tabular w-full bg-transparent text-xl font-semibold text-foreground outline-none placeholder:text-muted-foreground/60"
+        className="tabular w-full bg-transparent text-xl font-semibold text-foreground outline-none placeholder:text-muted-foreground/60 focus-visible:ring-0 focus-visible:ring-offset-0"
       />
     </div>
   );

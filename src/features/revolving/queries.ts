@@ -7,8 +7,12 @@ import type {
   RevolvingMovementRow,
   RevolvingSummaryRow,
 } from "@/shared/types/database";
+import { signReceiptPaths } from "@/features/receipts/server";
 
 export type RevolvingSummary = RevolvingSummaryRow;
+export type RevolvingMovementWithReceipt = RevolvingMovementRow & {
+  receiptUrl: string | null;
+};
 
 /** Cuentas rotativas del usuario, la más reciente primero. */
 export async function getRevolvingSummaries(): Promise<RevolvingSummary[]> {
@@ -26,7 +30,7 @@ export async function getRevolvingSummaries(): Promise<RevolvingSummary[]> {
 interface RevolvingDetail {
   account: RevolvingAccountRow;
   summary: RevolvingSummary;
-  movements: RevolvingMovementRow[];
+  movements: RevolvingMovementWithReceipt[];
 }
 
 /** Igual que el detalle de crédito: `generateMetadata` y el render lo piden
@@ -61,10 +65,20 @@ export const getRevolvingDetail = cache(async (
   if (movementsRes.error) throw new Error(movementsRes.error.message);
   if (!accountRes.data || !summaryRes.data) return null;
 
+  const movementRows = (movementsRes.data ?? []) as RevolvingMovementRow[];
+  const signed = await signReceiptPaths(
+    supabase,
+    movementRows.map((movement) => movement.receipt_path),
+  );
+
   return {
     account: accountRes.data,
     summary: summaryRes.data,
-    movements: movementsRes.data ?? [],
+    movements: movementRows.map((movement) => ({
+      ...movement,
+      receiptUrl: movement.receipt_path
+        ? (signed.get(movement.receipt_path) ?? null)
+        : null,
+    })),
   };
 });
-

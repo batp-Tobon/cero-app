@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import {
   ArrowDownCircle,
   ArrowUpCircle,
+  ExternalLink,
   Loader2,
   Percent,
   Receipt,
@@ -23,7 +24,8 @@ import { InlineNotice } from "@/shared/components/states";
 import { deleteMovement } from "@/features/revolving/actions";
 import { formatMoney } from "@/shared/lib/format";
 import { formatShortDate } from "@/shared/lib/dates";
-import type { MovementKindDB, RevolvingMovementRow } from "@/shared/types/database";
+import type { MovementKindDB } from "@/shared/types/database";
+import type { RevolvingMovementWithReceipt } from "@/features/revolving/queries";
 
 const META: Record<
   MovementKindDB,
@@ -45,10 +47,10 @@ export function MovementList({
   movements,
   currency,
 }: {
-  movements: RevolvingMovementRow[];
+  movements: RevolvingMovementWithReceipt[];
   currency: string;
 }) {
-  const [selected, setSelected] = React.useState<RevolvingMovementRow | null>(
+  const [selected, setSelected] = React.useState<RevolvingMovementWithReceipt | null>(
     null,
   );
 
@@ -92,6 +94,10 @@ export function MovementList({
                   <span className="block truncate text-xs text-muted-foreground">
                     {formatShortDate(movement.movement_date)}
                     {movement.description && ` · ${movement.description}`}
+                    {movement.kind === "charge" &&
+                      movement.installment_count > 1 &&
+                      ` · ${movement.installment_count} cuotas (${movement.installments_paid} pagadas)`}
+                    {movement.receipt_path && " · comprobante"}
                   </span>
                 </span>
 
@@ -127,7 +133,7 @@ function DeleteMovementSheet({
   currency,
   onOpenChange,
 }: {
-  movement: RevolvingMovementRow;
+  movement: RevolvingMovementWithReceipt;
   currency: string;
   onOpenChange: (open: boolean) => void;
 }) {
@@ -172,6 +178,32 @@ function DeleteMovementSheet({
               {formatMoney(movement.amount, currency)}
             </p>
           </div>
+
+          {movement.kind === "charge" && movement.installment_count > 1 && (
+            <div className="rounded-2xl border border-border px-4 py-3 text-sm">
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-muted-foreground">Compra diferida</span>
+                <span className="font-semibold">
+                  {movement.installments_paid} / {movement.installment_count} pagadas
+                </span>
+              </div>
+              <p className="tabular mt-1 text-xs text-muted-foreground">
+                Aproximadamente {formatMoney(
+                  Number(movement.amount) / movement.installment_count,
+                  currency,
+                )} por cuota
+              </p>
+            </div>
+          )}
+
+          {movement.receiptUrl && (
+            <Button variant="outline" className="w-full" asChild>
+              <a href={movement.receiptUrl} target="_blank" rel="noopener noreferrer">
+                <ExternalLink className="h-4 w-4" aria-hidden />
+                Ver comprobante
+              </a>
+            </Button>
+          )}
 
           <InlineNotice>
             Al eliminarlo, el saldo de la tarjeta se recalcula solo: es la suma

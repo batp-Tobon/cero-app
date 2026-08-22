@@ -2,7 +2,14 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, Pencil, TrendingDown, Trash2, Wallet } from "lucide-react";
+import {
+  ExternalLink,
+  Loader2,
+  Pencil,
+  TrendingDown,
+  Trash2,
+  Wallet,
+} from "lucide-react";
 import { toast } from "sonner";
 import {
   Sheet,
@@ -16,10 +23,11 @@ import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
 import { AmountField } from "@/shared/components/amount-field";
 import { InlineNotice } from "@/shared/components/states";
+import { ReceiptField } from "@/features/receipts/components/receipt-field";
 import { deletePayment, updatePayment } from "@/features/payments/actions";
 import { formatMoney } from "@/shared/lib/format";
 import { formatShortDate, todayISO } from "@/shared/lib/dates";
-import type { Payment } from "@/shared/types/domain";
+import type { PaymentWithReceipt } from "@/shared/types/domain";
 
 /**
  * Movimientos del crédito, con opción de corregirlos.
@@ -32,10 +40,10 @@ export function PaymentHistory({
   payments,
   currency,
 }: {
-  payments: Payment[];
+  payments: PaymentWithReceipt[];
   currency: string;
 }) {
-  const [editing, setEditing] = React.useState<Payment | null>(null);
+  const [editing, setEditing] = React.useState<PaymentWithReceipt | null>(null);
 
   if (payments.length === 0) {
     return (
@@ -63,7 +71,9 @@ export function PaymentHistory({
         {payments.map((payment) => {
           const isExtra = Number(payment.amount_paid) === 0;
           const total =
-            Number(payment.amount_paid) + Number(payment.extra_principal);
+            Number(payment.amount_paid) +
+            Number(payment.extra_principal) +
+            Number(payment.other_paid);
 
           return (
             <li key={payment.id}>
@@ -100,6 +110,9 @@ export function PaymentHistory({
                     {!isExtra &&
                       Number(payment.extra_principal) > 0 &&
                       ` · abono ${formatMoney(payment.extra_principal, currency)}`}
+                    {Number(payment.other_paid) > 0 &&
+                      ` · otros ${formatMoney(payment.other_paid, currency)}`}
+                    {payment.receipt_path && " · comprobante"}
                   </span>
                 </span>
 
@@ -142,7 +155,7 @@ function EditPaymentSheet({
   open,
   onOpenChange,
 }: {
-  payment: Payment;
+  payment: PaymentWithReceipt;
   currency: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -159,6 +172,7 @@ function EditPaymentSheet({
 
   async function onSave(e: React.FormEvent) {
     e.preventDefault();
+    const receiptData = new FormData(e.currentTarget as HTMLFormElement);
     setError(null);
     setPending(true);
 
@@ -167,7 +181,7 @@ function EditPaymentSheet({
       paymentDate: date,
       amountPaid: amount,
       extraPrincipal: extra,
-    });
+    }, receiptData);
     setPending(false);
 
     if (!result.ok) {
@@ -221,6 +235,15 @@ function EditPaymentSheet({
             renumeran y el saldo se ajusta solo.
           </InlineNotice>
 
+          {payment.receiptUrl && (
+            <Button variant="outline" className="w-full" asChild>
+              <a href={payment.receiptUrl} target="_blank" rel="noopener noreferrer">
+                <ExternalLink className="h-4 w-4" aria-hidden />
+                Ver comprobante guardado
+              </a>
+            </Button>
+          )}
+
           <div className="space-y-1.5">
             <Label htmlFor="edit-date">Fecha</Label>
             <Input
@@ -233,6 +256,12 @@ function EditPaymentSheet({
               disabled={pending}
             />
           </div>
+
+          <ReceiptField
+            id={`edit-receipt-${payment.id}`}
+            disabled={pending}
+            existingName={payment.receipt_name}
+          />
 
           {!isExtra && (
             <div className="space-y-1.5">
