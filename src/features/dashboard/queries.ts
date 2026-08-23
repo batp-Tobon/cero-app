@@ -1,6 +1,7 @@
 import "server-only";
 
 import { cache } from "react";
+import { calculateBudget, type BudgetTotals } from "@/core/budget";
 import { entitlementFromBillingContext } from "@/features/billing/queries";
 import { createClient } from "@/infrastructure/supabase/server";
 import { todayISO } from "@/shared/lib/dates";
@@ -26,7 +27,8 @@ export interface DashboardBudget {
   source: DashboardBudgetRow["source"];
   currency: string | null;
   incomes: DashboardIncome[];
-  total: number;
+  /** Sueldo, gastos, cuotas y lo que queda — calculado como en /presupuesto. */
+  totals: BudgetTotals;
 }
 
 export interface DashboardSnapshot {
@@ -82,6 +84,13 @@ function toBudget(row: DashboardBudgetRow | null | undefined): DashboardBudget {
     source: row?.source ?? "empty",
     currency: row?.currency ?? null,
     incomes,
-    total: incomes.reduce((sum, income) => sum + income.amount, 0),
+    // La misma función pura que usa /presupuesto. Los gastos y las cuotas
+    // llegan ya sumados y sin negativos desde SQL, así que pasarlos como un
+    // único importe da idéntico resultado que pasar la lista entera.
+    totals: calculateBudget(
+      incomes,
+      [{ amount: Number(row?.expense_total ?? 0) }],
+      [{ amount: Number(row?.obligation_total ?? 0) }],
+    ),
   };
 }
