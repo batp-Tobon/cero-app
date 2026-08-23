@@ -63,6 +63,13 @@ export async function createWompiCheckout(): Promise<
       .eq("user_id", user.id)
       .eq("provider", "wompi")
       .eq("price_id", price.id)
+      // El importe, no sólo el id del precio: el administrador edita la fila
+      // existente de saas_prices, así que tras un cambio de tarifa el id sigue
+      // siendo el mismo. Reutilizar aquí una referencia creada con el precio
+      // viejo mandaría a Wompi a cobrar el nuevo importe firmado contra una
+      // fila que guarda el anterior, y el webhook —que exige `amount = p_amount`—
+      // rechazaría un pago ya cobrado, dejando al cliente sin plan.
+      .eq("amount", Number(price.amount))
       .eq("status", "pending")
       .gte("created_at", recentSince)
       .order("created_at", { ascending: false })

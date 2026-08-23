@@ -211,6 +211,9 @@ export async function updatePlanSettings(
   if (error) return { ok: false, error: readableAdminError(error.message) };
 
   revalidatePath("/admin");
+  // /suscripcion es la pantalla donde el cliente ve el precio: omitirla dejaba
+  // el importe viejo en la caché del router tras un cambio de tarifa.
+  revalidatePath("/suscripcion");
   revalidatePath("/inicio");
   revalidatePath("/ia");
   return { ok: true, data: undefined };
