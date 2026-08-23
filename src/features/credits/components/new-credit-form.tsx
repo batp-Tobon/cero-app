@@ -271,12 +271,12 @@ export function NewCreditForm({ currency }: { currency: string }) {
       >
         <h2
           id="summary"
-          className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground"
+          className="eyebrow"
         >
           Resumen del crédito
         </h2>
 
-        <p className="tabular mt-3 text-3xl font-bold tracking-tight text-primary">
+        <p className="figure-lead mt-3 text-primary">
           {formatMoney(preview?.firstPayment ?? 0, currency)}
         </p>
         <p className="text-xs text-muted-foreground">

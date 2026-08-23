@@ -36,7 +36,7 @@ export function BudgetSummaryCard({
         <div className="flex items-center justify-between gap-3">
           <p
             id="available-title"
-            className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground"
+            className="eyebrow"
           >
             Disponible después de todo
           </p>
@@ -52,7 +52,7 @@ export function BudgetSummaryCard({
 
         <p
           className={cn(
-            "tabular mt-3 text-[2.35rem] font-bold leading-none tracking-[-0.045em]",
+            "figure-hero mt-3",
             totals.remaining < 0 ? "text-destructive" : "text-primary",
           )}
         >

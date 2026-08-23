@@ -197,10 +197,10 @@ export function NewRevolvingForm({ currency }: { currency: string }) {
         aria-live="polite"
         className="rounded-3xl bg-card p-5"
       >
-        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+        <p className="eyebrow">
           Cupo disponible
         </p>
-        <p className="tabular mt-2 text-3xl font-bold tracking-tight text-primary">
+        <p className="figure-lead mt-2 text-primary">
           {formatMoney(Math.max(0, creditLimit - openingBalance), currency)}
         </p>
         <p className="mt-1 text-xs text-muted-foreground">

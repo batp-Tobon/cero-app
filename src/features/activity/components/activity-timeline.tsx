@@ -46,7 +46,7 @@ export function ActivityTimeline({
         <section key={month} aria-labelledby={`month-${month}`}>
           <h2
             id={`month-${month}`}
-            className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground"
+            className="eyebrow"
           >
             {formatMonthTitle(`${month}-01`)}
           </h2>

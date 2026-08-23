@@ -31,7 +31,7 @@ const CardEyebrow = React.forwardRef<
   <p
     ref={ref}
     className={cn(
-      "text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground",
+      "eyebrow",
       className,
     )}
     {...props}

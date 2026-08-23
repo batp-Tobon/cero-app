@@ -132,7 +132,7 @@ export function PaymentSheet({
             <p className="mt-1 text-sm text-muted-foreground">
               Tu saldo se actualizó correctamente.
             </p>
-            <p className="tabular mt-6 text-2xl font-bold">
+            <p className="figure-card mt-6">
               {formatMoney(newBalance, target.currency)}
             </p>
             <p className="text-xs text-muted-foreground">nuevo saldo</p>

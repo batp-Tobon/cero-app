@@ -124,7 +124,7 @@ export function ExtraPrincipalSheet({
             <p className="mt-1 text-sm text-muted-foreground">
               Recalculamos tu plan de pagos.
             </p>
-            <p className="tabular mt-6 text-2xl font-bold">
+            <p className="figure-card mt-6">
               {formatMoney(result.newBalance, currency)}
             </p>
             <p className="text-xs text-muted-foreground">nuevo saldo</p>
@@ -195,10 +195,10 @@ export function ExtraPrincipalSheet({
           <ReceiptField id="extra-receipt" disabled={pending} />
 
           <div className="rounded-2xl bg-secondary p-4">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+            <p className="eyebrow">
               Nuevo saldo estimado
             </p>
-            <p className="tabular mt-1 text-2xl font-bold text-primary">
+            <p className="figure-card mt-1 text-primary">
               {formatMoney(estimatedBalance, currency)}
             </p>
           </div>

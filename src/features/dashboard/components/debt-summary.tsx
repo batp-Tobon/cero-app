@@ -28,7 +28,7 @@ export function DebtSummary({ overview }: { overview: DebtOverview }) {
           Deuda total
         </CardEyebrow>
 
-        <p className="tabular mt-3 text-center text-[2.6rem] font-bold leading-none tracking-tight">
+        <p className="figure-hero mt-3 text-center">
           {formatMoney(totalDebt, currency)}
         </p>
         <p className="mt-2 text-center text-sm text-muted-foreground">
@@ -60,7 +60,7 @@ export function DebtSummary({ overview }: { overview: DebtOverview }) {
         {revolvingDebt > 0 && creditDebt > 0 && (
           <dl className="mt-6 grid grid-cols-2 gap-2.5 border-t border-border pt-5">
             <div className="text-center">
-              <dt className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+              <dt className="eyebrow-sm">
                 Créditos
               </dt>
               <dd className="tabular mt-1 text-sm font-semibold">
@@ -68,7 +68,7 @@ export function DebtSummary({ overview }: { overview: DebtOverview }) {
               </dd>
             </div>
             <div className="text-center">
-              <dt className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+              <dt className="eyebrow-sm">
                 Tarjetas
               </dt>
               <dd className="tabular mt-1 text-sm font-semibold">

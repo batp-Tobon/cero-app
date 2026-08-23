@@ -64,7 +64,7 @@ export default async function ProfilePage() {
 
         <dl className="mt-6 grid w-full grid-cols-2 gap-2.5">
           <div className="rounded-2xl bg-secondary px-3 py-3.5">
-            <dt className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+            <dt className="eyebrow-sm">
               Deuda activa
             </dt>
             <dd className="tabular mt-1 text-sm font-semibold">
@@ -72,7 +72,7 @@ export default async function ProfilePage() {
             </dd>
           </div>
           <div className="rounded-2xl bg-secondary px-3 py-3.5">
-            <dt className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+            <dt className="eyebrow-sm">
               Total pagado
             </dt>
             <dd className="tabular mt-1 text-sm font-semibold text-primary">

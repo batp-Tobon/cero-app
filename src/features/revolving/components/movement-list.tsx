@@ -173,7 +173,7 @@ function DeleteMovementSheet({
           {error && <InlineNotice variant="danger">{error}</InlineNotice>}
 
           <div className="rounded-2xl bg-secondary p-4 text-center">
-            <p className="tabular text-2xl font-bold">
+            <p className="figure-card">
               {meta.reducesDebt ? "−" : "+"}
               {formatMoney(movement.amount, currency)}
             </p>

@@ -51,7 +51,7 @@ export function RevolvingCard({ account }: { account: RevolvingSummary }) {
           />
         </div>
 
-        <p className="tabular mt-4 text-2xl font-bold tracking-tight">
+        <p className="figure-card mt-4">
           {formatMoney(account.balance, account.currency)}
         </p>
         <p className="text-xs text-muted-foreground">cupo usado</p>

@@ -105,7 +105,7 @@ export default async function AiInsightsPage() {
 
       <dl className="mt-4 grid grid-cols-2 gap-2.5">
         <div className="rounded-2xl bg-card p-4">
-          <dt className="text-[10px] uppercase tracking-wide text-muted-foreground">
+          <dt className="eyebrow-sm">
             Disponible
           </dt>
           <dd className={cn(
@@ -116,7 +116,7 @@ export default async function AiInsightsPage() {
           </dd>
         </div>
         <div className="rounded-2xl bg-card p-4">
-          <dt className="text-[10px] uppercase tracking-wide text-muted-foreground">
+          <dt className="eyebrow-sm">
             Comprometido
           </dt>
           <dd className="tabular mt-1.5 text-lg font-bold">

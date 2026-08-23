@@ -96,6 +96,49 @@
   }
 }
 
+/* ---------------------------------------------------------------------------
+   Tipografía con nombre
+   El mismo rótulo en versalitas llegó a escribirse de siete formas distintas
+   —11 px y 10 px, semibold y medium, cuatro interletrajes— según quién tocara
+   la pantalla. Escrito a mano se desvía; con nombre, no puede.
+
+   El sistema entero: un interletraje, un peso, dos tamaños y un acento.
+   Van en `components` para que cualquier utilidad de Tailwind siga pudiendo
+   sobreescribirlas puntualmente.
+   --------------------------------------------------------------------------- */
+@layer components {
+  /* Rótulo de sección: DEUDA TOTAL, PRÓXIMO PAGO, TARJETAS Y CUPOS. */
+  .eyebrow {
+    @apply text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground;
+  }
+
+  /* Rótulo dentro de una tarjeta pequeña: CUOTA MENSUAL, TASA, PROGRESO. */
+  .eyebrow-sm {
+    @apply text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground;
+  }
+
+  /* Cuando el rótulo es el acento de la pantalla y no un dato de apoyo. */
+  .eyebrow-accent {
+    @apply text-primary;
+  }
+
+  /* Cifras de dinero. Siempre tabulares: sin ellas los importes bailan al
+     actualizarse, porque el 1 es más estrecho que los demás dígitos. */
+  .figure-hero {
+    @apply tabular text-[2.6rem] font-bold leading-none tracking-tight;
+  }
+  .figure-page {
+    @apply tabular text-[2.4rem] font-bold leading-none tracking-tight;
+  }
+  /* Previsualización de un formulario: la cuota estimada antes de guardar. */
+  .figure-lead {
+    @apply tabular text-3xl font-bold tracking-tight;
+  }
+  .figure-card {
+    @apply tabular text-2xl font-bold tracking-tight;
+  }
+}
+
 @layer utilities {
   /* Safe-area (notch, isla dinámica, indicador de inicio).
      Requiere viewport-fit=cover, configurado en el layout raíz. */

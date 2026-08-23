@@ -75,7 +75,7 @@ export default async function SubscriptionPage({
             {data.entitlement.canWrite ? "Con acceso" : "Sólo consulta"}
           </span>
         </div>
-        <p className="mt-5 text-[10px] font-semibold uppercase tracking-[0.18em] text-primary">
+        <p className="mt-5 eyebrow-sm eyebrow-accent">
           Tu cuenta
         </p>
         <h1 className="mt-1 font-serif text-3xl font-semibold leading-tight">

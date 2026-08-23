@@ -60,7 +60,7 @@ export function CreditCard({
           />
         </div>
 
-        <p className="tabular mt-4 text-2xl font-bold tracking-tight">
+        <p className="figure-card mt-4">
           {formatMoney(credit.balance, credit.currency)}
         </p>
 

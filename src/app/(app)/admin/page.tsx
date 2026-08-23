@@ -46,7 +46,7 @@ export default async function AdminPage({
 
       <header className="mt-2 flex items-start justify-between gap-4">
         <div>
-          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-primary">
+          <p className="eyebrow-sm eyebrow-accent">
             Backoffice CERO
           </p>
           <h1 className="mt-1 font-serif text-3xl font-semibold leading-none tracking-tight">

@@ -82,7 +82,7 @@ export default async function CreditsPage() {
             <div className="flex items-baseline justify-between gap-3">
               <h2
                 id="cards"
-                className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground"
+                className="eyebrow"
               >
                 Tarjetas y cupos
               </h2>
@@ -110,7 +110,7 @@ export default async function CreditsPage() {
 
           {settled.length > 0 && (
             <>
-              <h2 className="pt-5 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+              <h2 className="pt-5 eyebrow">
                 Terminados
               </h2>
               {settled.map((credit) => (

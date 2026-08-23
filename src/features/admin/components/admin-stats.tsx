@@ -49,7 +49,7 @@ export function AdminStats({ metrics }: { metrics: AdminBillingMetricsRow }) {
             >
               <Icon className="h-4 w-4" aria-hidden />
             </span>
-            <dt className="mt-3 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+            <dt className="mt-3 eyebrow-sm">
               {item.label}
             </dt>
             <dd className="tabular mt-1 break-words text-xl font-semibold tracking-tight">

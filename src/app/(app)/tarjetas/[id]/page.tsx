@@ -60,7 +60,7 @@ export default async function RevolvingDetailPage({ params }: Params) {
           className="mx-auto mb-4"
         />
         <CardEyebrow id="balance">Cupo usado</CardEyebrow>
-        <p className="tabular mt-2 text-[2.4rem] font-bold leading-none tracking-tight">
+        <p className="figure-page mt-2">
           {formatMoney(balance, account.currency)}
         </p>
         <p className="tabular mt-2 text-sm text-primary">

@@ -177,7 +177,7 @@ export function SubscriptionActions({
 
         <div className="mt-4 flex items-center gap-2 rounded-2xl bg-secondary p-3">
           <div className="min-w-0 flex-1">
-            <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
+            <p className="eyebrow-sm">
               Llave Bre-B
             </p>
             <p className="mt-0.5 truncate text-sm font-semibold">

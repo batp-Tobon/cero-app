@@ -25,7 +25,7 @@ export function MonthSummary({
   return (
     <dl className="mt-7 grid grid-cols-2 gap-2.5">
       <div className="rounded-2xl bg-card p-4">
-        <dt className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+        <dt className="flex items-center gap-1.5 eyebrow-sm">
           <CalendarClock className="h-3.5 w-3.5" aria-hidden />
           Este mes
         </dt>
@@ -42,7 +42,7 @@ export function MonthSummary({
       </div>
 
       <div className="rounded-2xl bg-card p-4">
-        <dt className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+        <dt className="flex items-center gap-1.5 eyebrow-sm">
           <Flag className="h-3.5 w-3.5" aria-hidden />
           Libre de deuda
         </dt>

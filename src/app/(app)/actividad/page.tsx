@@ -48,10 +48,10 @@ export default async function ActivityPage() {
       ) : (
         <>
           <div className="mt-5 rounded-3xl bg-card p-5">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+            <p className="eyebrow">
               Total pagado este mes
             </p>
-            <p className="tabular mt-2 text-2xl font-bold text-primary">
+            <p className="figure-card mt-2 text-primary">
               {formatMoney(paidThisMonth, profile?.currency)}
             </p>
           </div>

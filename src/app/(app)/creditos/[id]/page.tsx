@@ -81,7 +81,7 @@ export default async function CreditDetailPage({ params }: Params) {
 
       <section aria-labelledby="balance" className="mt-7 text-center">
         <CardEyebrow id="balance">Saldo pendiente</CardEyebrow>
-        <p className="tabular mt-2 text-[2.4rem] font-bold leading-none tracking-tight">
+        <p className="figure-page mt-2">
           {formatMoney(summary.balance, credit.currency)}
         </p>
       </section>
@@ -219,7 +219,7 @@ function Stat({
 }) {
   return (
     <div className="rounded-2xl bg-card px-3 py-3.5 text-center">
-      <dt className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+      <dt className="eyebrow-sm">
         {label}
       </dt>
       <dd className="tabular mt-1.5 text-sm font-semibold leading-tight">
