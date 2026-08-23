@@ -20,16 +20,35 @@ const roleSchema = z.object({
   reason,
 });
 
-const subscriptionSchema = z.object({
-  userId: z.string().uuid(),
-  planId: z.string().uuid(),
-  status: z.enum(["trialing", "active", "past_due", "canceled", "expired"]),
-  accessUntil: z
-    .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/)
-    .nullable(),
-  reason,
-});
+const subscriptionSchema = z
+  .object({
+    userId: z.string().uuid(),
+    planId: z.string().uuid(),
+    status: z.enum(["trialing", "active", "past_due", "canceled", "expired"]),
+    accessUntil: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/)
+      .nullable(),
+    indefinite: z.boolean(),
+    reason,
+  })
+  .superRefine((value, context) => {
+    if (value.indefinite && value.status !== "active") {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["indefinite"],
+        message: "El acceso indefinido necesita una suscripción activa.",
+      });
+    }
+    const needsDate = ["trialing", "active", "past_due"].includes(value.status);
+    if (needsDate && !value.indefinite && !value.accessUntil) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["accessUntil"],
+        message: "Selecciona una fecha de finalización.",
+      });
+    }
+  });
 
 const planSchema = z.object({
   planId: z.string().uuid(),
@@ -69,6 +88,9 @@ function readableAdminError(message: string): string {
   }
   if (message.includes("future grace")) {
     return "El periodo de gracia necesita una fecha futura.";
+  }
+  if (message.includes("Indefinite access requires")) {
+    return "El acceso indefinido sólo puede asignarse a una suscripción activa.";
   }
   if (message.includes("Active plan not found")) {
     return "Ese plan ya no está disponible.";
@@ -143,11 +165,12 @@ export async function setUserSubscription(
     ? `${parsed.data.accessUntil}T23:59:59.999Z`
     : null;
   const supabase = await createClient();
-  const { data, error } = await supabase.rpc("admin_set_subscription", {
+  const { data, error } = await supabase.rpc("admin_set_subscription_v2", {
     p_user_id: parsed.data.userId,
     p_plan_id: parsed.data.planId,
     p_status: parsed.data.status,
     p_access_until: accessUntil,
+    p_indefinite: parsed.data.indefinite,
     p_reason: parsed.data.reason,
   });
 

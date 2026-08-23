@@ -1,7 +1,10 @@
-import { FileCheck2, Paperclip } from "lucide-react";
-import { Input } from "@/shared/ui/input";
+"use client";
+
+import * as React from "react";
+import { FileCheck2, FileUp, Paperclip } from "lucide-react";
 import { Label } from "@/shared/ui/label";
 import { RECEIPT_ACCEPT } from "@/features/receipts/constants";
+import { cn } from "@/shared/lib/utils";
 
 export function ReceiptField({
   id,
@@ -12,6 +15,8 @@ export function ReceiptField({
   disabled?: boolean;
   existingName?: string | null;
 }) {
+  const [selectedName, setSelectedName] = React.useState<string | null>(null);
+
   return (
     <div className="space-y-1.5">
       <Label htmlFor={id} className="flex items-center gap-2">
@@ -24,14 +29,35 @@ export function ReceiptField({
           Guardado: {existingName}
         </p>
       )}
-      <Input
-        id={id}
-        name="receipt"
-        type="file"
-        accept={RECEIPT_ACCEPT}
-        disabled={disabled}
-        className="file:mr-3 file:rounded-full file:border-0 file:bg-primary/10 file:px-3 file:py-1 file:text-xs file:font-semibold file:text-primary"
-      />
+      <label
+        htmlFor={id}
+        aria-disabled={disabled || undefined}
+        className={cn(
+          "flex h-12 min-w-0 items-center gap-3 rounded-2xl border border-border bg-secondary px-3",
+          "cursor-pointer transition-colors hover:bg-accent",
+          "focus-within:border-primary/60 focus-within:ring-2 focus-within:ring-primary/20",
+          disabled && "pointer-events-none opacity-50",
+        )}
+      >
+        <input
+          id={id}
+          name="receipt"
+          type="file"
+          accept={RECEIPT_ACCEPT}
+          disabled={disabled}
+          className="sr-only"
+          onChange={(event) =>
+            setSelectedName(event.currentTarget.files?.[0]?.name ?? null)
+          }
+        />
+        <span className="flex shrink-0 items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1.5 text-xs font-semibold text-primary">
+          <FileUp className="h-3.5 w-3.5" aria-hidden />
+          Seleccionar
+        </span>
+        <span className="min-w-0 flex-1 truncate text-sm text-muted-foreground">
+          {selectedName ?? "Ningún archivo seleccionado"}
+        </span>
+      </label>
       <p className="text-[11px] leading-relaxed text-muted-foreground">
         Foto o PDF, máximo 6 MB. Se guarda privado y sólo lo ven quienes tienen
         acceso al producto.

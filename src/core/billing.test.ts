@@ -69,6 +69,25 @@ describe("resolveBillingEntitlement", () => {
     expect(result.canWrite).toBe(true);
   });
 
+  it("mantiene activo un acceso administrativo indefinido", () => {
+    const result = resolveBillingEntitlement({
+      isAdmin: false,
+      freePlan: free,
+      now: NOW,
+      subscription: {
+        status: "active",
+        plan: pro,
+        currentPeriodEnd: "infinity",
+      },
+    });
+    expect(result).toMatchObject({
+      tier: "pro",
+      canWrite: true,
+      reason: "subscription_indefinite",
+      accessUntil: null,
+    });
+  });
+
   it("no considera ilimitada una suscripción paga sin periodo", () => {
     const result = resolveBillingEntitlement({
       isAdmin: false,

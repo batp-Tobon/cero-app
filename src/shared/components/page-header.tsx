@@ -24,7 +24,7 @@ export function PageHeader({
 }) {
   return (
     <header
-      className={cn("flex items-center gap-3 pt-safe", className)}
+      className={cn("flex items-center gap-3", className)}
       // La cabecera no es fija: en móvil el scroll debe devolver toda la
       // pantalla al contenido.
     >

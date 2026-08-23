@@ -139,7 +139,6 @@ export function ExtraPrincipalSheet({
             <Button
               className="mt-7 w-full"
               onClick={() => onOpenChange(false)}
-              autoFocus
             >
               Listo
             </Button>

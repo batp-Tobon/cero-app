@@ -72,7 +72,6 @@ export function IncomeEntrySheet({
                 placeholder="Ej. Sueldo"
                 maxLength={80}
                 disabled={disabled}
-                autoFocus
               />
             </div>
 
@@ -163,7 +162,6 @@ export function ExpenseEntrySheet({
                 placeholder="Ej. Arriendo"
                 maxLength={80}
                 disabled={disabled}
-                autoFocus
               />
             </div>
 
@@ -189,8 +187,8 @@ export function ExpenseEntrySheet({
               </Select>
             </div>
 
-            <div className="grid grid-cols-[minmax(0,1fr)_5.5rem] gap-3">
-              <div className="space-y-1.5">
+            <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_5.5rem] gap-3">
+              <div className="min-w-0 space-y-1.5">
                 <Label htmlFor="expense-amount">Valor mensual</Label>
                 <AmountField
                   id="expense-amount"
@@ -199,7 +197,7 @@ export function ExpenseEntrySheet({
                   disabled={disabled}
                 />
               </div>
-              <div className="space-y-1.5">
+              <div className="min-w-0 space-y-1.5">
                 <Label htmlFor="expense-day">Día</Label>
                 <Input
                   id="expense-day"

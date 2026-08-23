@@ -56,10 +56,12 @@
     color-scheme: dark;
     /* El rebote de iOS deja ver el fondo del navegador tras la nav fija. */
     background-color: hsl(var(--background));
+    min-height: 100%;
   }
 
   body {
     @apply bg-background text-foreground antialiased;
+    min-height: 100dvh;
     -webkit-tap-highlight-color: transparent;
     overscroll-behavior-y: none;
   }
@@ -72,6 +74,15 @@
   /* Los selectores de fecha nativos son ilegibles en oscuro por defecto. */
   input[type="date"] {
     color-scheme: dark;
+    min-width: 0;
+    max-width: 100%;
+    width: 100%;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+  input[type="date"]::-webkit-date-and-time-value {
+    min-width: 0;
+    text-align: center;
   }
   input[type="date"]::-webkit-calendar-picker-indicator {
     filter: invert(0.7) sepia(1) saturate(3) hue-rotate(105deg);
@@ -92,7 +103,7 @@
     padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 0.5rem);
   }
   .pt-safe {
-    padding-top: calc(env(safe-area-inset-top, 0px) + 0.5rem);
+    padding-top: calc(env(safe-area-inset-top, 0px) + 0.75rem);
   }
   .px-safe {
     padding-left: max(1.25rem, env(safe-area-inset-left, 0px));
@@ -100,7 +111,7 @@
   }
   /* Altura que deja libre la navegación inferior fija. */
   .pb-nav {
-    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 6.5rem);
+    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 7rem);
   }
 
   .no-scrollbar::-webkit-scrollbar {

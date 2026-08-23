@@ -785,6 +785,17 @@ export type Database = {
         };
         Returns: string;
       };
+      admin_set_subscription_v2: {
+        Args: {
+          p_user_id: string;
+          p_plan_id: string;
+          p_status: SaasSubscriptionStatusDB;
+          p_access_until: string | null;
+          p_indefinite: boolean;
+          p_reason: string;
+        };
+        Returns: string;
+      };
       admin_update_plan: {
         Args: {
           p_plan_id: string;

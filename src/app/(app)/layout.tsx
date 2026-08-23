@@ -14,7 +14,7 @@ export default async function AppLayout({
 
   return (
     <div className="relative mx-auto flex min-h-dvh w-full max-w-md flex-col bg-background">
-      <main className="px-safe flex-1 pb-nav">{children}</main>
+      <main className="px-safe pt-safe flex-1 pb-nav">{children}</main>
       <BottomNav />
     </div>
   );

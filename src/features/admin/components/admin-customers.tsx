@@ -123,7 +123,11 @@ function CustomerCard({
               {subscription?.planName ?? "CERO Gratis"}
             </Badge>
             <span className="text-[11px] text-muted-foreground">
-              {subscription ? STATUS_LABELS[subscription.status] : "Sin suscripción"}
+              {subscription?.isIndefinite
+                ? "Sin vencimiento"
+                : subscription
+                  ? STATUS_LABELS[subscription.status]
+                  : "Sin suscripción"}
             </span>
           </div>
         </div>
@@ -144,7 +148,7 @@ function CustomerCard({
       </p>
 
       <CustomerManager
-        key={`${subscription?.id ?? "free"}-${subscription?.status ?? "none"}-${subscription?.accessUntil ?? ""}`}
+        key={`${subscription?.id ?? "free"}-${subscription?.status ?? "none"}-${subscription?.accessUntil ?? ""}-${subscription?.isIndefinite ?? false}`}
         open={open}
         onOpenChange={setOpen}
         customer={customer}
@@ -180,10 +184,14 @@ function CustomerManager({
   const [accessUntil, setAccessUntil] = React.useState(
     customer.subscription?.accessUntil?.slice(0, 10) ?? "",
   );
+  const [indefinite, setIndefinite] = React.useState(
+    customer.subscription?.isIndefinite ?? false,
+  );
   const [reason, setReason] = React.useState("");
   const [busy, setBusy] = React.useState<"subscription" | "role" | null>(null);
 
   const needsDate =
+    !indefinite &&
     (status === "trialing" || status === "active" || status === "past_due");
   const canSubmit = reason.trim().length >= 10;
 
@@ -191,11 +199,17 @@ function CustomerManager({
     setPlanId(value);
     const plan = plans.find((item) => item.id === value);
     if (plan?.code === "free") {
+      setIndefinite(false);
       setStatus("trialing");
       const end = new Date();
       end.setUTCDate(end.getUTCDate() + Math.max(1, plan.trialDays));
       setAccessUntil(end.toISOString().slice(0, 10));
     }
+  }
+
+  function changeStatus(value: SaasSubscriptionStatusDB) {
+    setStatus(value);
+    if (value !== "active") setIndefinite(false);
   }
 
   async function saveSubscription() {
@@ -206,6 +220,7 @@ function CustomerManager({
       planId,
       status,
       accessUntil: accessUntil || null,
+      indefinite,
       reason,
     });
     setBusy(null);
@@ -284,7 +299,7 @@ function CustomerManager({
                 <Select
                   value={status}
                   onValueChange={(value) =>
-                    setStatus(value as SaasSubscriptionStatusDB)
+                    changeStatus(value as SaasSubscriptionStatusDB)
                   }
                 >
                   <SelectTrigger id={`status-${customer.id}`}>
@@ -300,10 +315,29 @@ function CustomerManager({
                 </Select>
               </div>
 
+              {status === "active" && (
+                <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-border bg-secondary px-4 py-3.5">
+                  <input
+                    type="checkbox"
+                    checked={indefinite}
+                    onChange={(event) => setIndefinite(event.target.checked)}
+                    className="mt-0.5 h-4 w-4 shrink-0 accent-[hsl(var(--primary))]"
+                  />
+                  <span className="min-w-0">
+                    <span className="block text-sm font-medium">
+                      Acceso indefinido
+                    </span>
+                    <span className="mt-0.5 block text-[11px] leading-relaxed text-muted-foreground">
+                      Mantiene el plan activo hasta que un administrador lo cambie.
+                    </span>
+                  </span>
+                </label>
+              )}
+
               {needsDate && (
                 <div className="space-y-1.5">
                   <Label htmlFor={`access-until-${customer.id}`}>
-                    Acceso hasta {needsDate && <span className="text-destructive">*</span>}
+                    Acceso hasta <span className="text-destructive">*</span>
                   </Label>
                   <Input
                     id={`access-until-${customer.id}`}

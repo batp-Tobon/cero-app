@@ -34,7 +34,7 @@ export default async function AdminPage({
 
   return (
     <div className="animate-fade-in">
-      <nav className="pt-safe" aria-label="Navegación del backoffice">
+      <nav aria-label="Navegación del backoffice">
         <Link
           href="/perfil"
           aria-label="Volver al perfil"

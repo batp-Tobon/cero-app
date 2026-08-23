@@ -7,7 +7,7 @@ import { Skeleton } from "@/shared/ui/skeleton";
  */
 export default function AppLoading() {
   return (
-    <div className="pt-safe" aria-busy="true" aria-live="polite">
+    <div aria-busy="true" aria-live="polite">
       <span className="sr-only">Cargando…</span>
 
       <div className="flex items-center justify-between gap-4">

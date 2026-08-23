@@ -14,6 +14,7 @@ const STATUS_COPY = {
   administrator: "Acceso de administrador",
   trial_active: "Prueba gratuita activa",
   subscription_active: "CERO Pro activo",
+  subscription_indefinite: "CERO Pro sin vencimiento",
   payment_grace: "Pago en periodo de gracia",
   cancellation_scheduled: "Activo hasta finalizar el periodo",
   free_plan: "Plan gratuito",
@@ -119,15 +120,28 @@ export default async function SubscriptionPage({
         </ul>
       </section>
 
-      <SubscriptionActions
-        userId={data.userId}
-        amountLabel={amountLabel}
-        wompiEnabled={data.wompiEnabled}
-        paymentKey={data.paymentKey}
-        supportWhatsapp={data.supportWhatsapp}
-        hasPendingManualPayment={Boolean(data.pendingManualPayment)}
-        processingReturn={params.pago === "procesando"}
-      />
+      {data.entitlement.reason === "subscription_indefinite" ? (
+        <div className="rounded-3xl border border-primary/25 bg-primary/10 p-4">
+          <p className="flex items-center gap-2 text-sm font-semibold text-primary">
+            <ShieldCheck className="h-4 w-4" aria-hidden />
+            Acceso concedido por administración
+          </p>
+          <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
+            No tienes una renovación pendiente. El acceso permanecerá activo hasta
+            que un administrador cambie tu suscripción.
+          </p>
+        </div>
+      ) : (
+        <SubscriptionActions
+          userId={data.userId}
+          amountLabel={amountLabel}
+          wompiEnabled={data.wompiEnabled}
+          paymentKey={data.paymentKey}
+          supportWhatsapp={data.supportWhatsapp}
+          hasPendingManualPayment={Boolean(data.pendingManualPayment)}
+          processingReturn={params.pago === "procesando"}
+        />
+      )}
 
       <p className="mt-5 flex items-start gap-2 rounded-2xl border border-border px-4 py-3 text-[11px] leading-relaxed text-muted-foreground">
         <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden />

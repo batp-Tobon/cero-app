@@ -26,6 +26,7 @@ export type EntitlementReason =
   | "trial_active"
   | "trial_expired"
   | "subscription_active"
+  | "subscription_indefinite"
   | "subscription_expired"
   | "payment_grace"
   | "payment_past_due"
@@ -54,6 +55,13 @@ function isFuture(value: string | null | undefined, now: number): boolean {
   if (!value) return false;
   const timestamp = Date.parse(value);
   return Number.isFinite(timestamp) && timestamp > now;
+}
+
+/** PostgreSQL serializa sus marcas temporales infinitas como texto. */
+export function isIndefiniteAccess(
+  value: string | null | undefined,
+): boolean {
+  return value === "infinity" || value === "+infinity";
 }
 
 function entitlement(
@@ -109,6 +117,9 @@ export function resolveBillingEntitlement({
   }
 
   if (subscription.status === "active") {
+    if (isIndefiniteAccess(subscription.currentPeriodEnd)) {
+      return entitlement(plan, "subscription_indefinite", true);
+    }
     if (!subscription.currentPeriodEnd) {
       return entitlement(plan, "subscription_missing_period", false);
     }

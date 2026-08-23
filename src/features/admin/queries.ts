@@ -1,5 +1,6 @@
 import "server-only";
 
+import { isIndefiniteAccess } from "@/core/billing";
 import {
   createClient,
   getCurrentProfile,
@@ -34,6 +35,7 @@ export interface AdminSubscription {
   planName: string;
   status: SaasSubscriptionRow["status"];
   accessUntil: string | null;
+  isIndefinite: boolean;
 }
 
 export interface AdminCustomer {
@@ -234,6 +236,7 @@ export async function getAdminOverview(search = ""): Promise<AdminOverview> {
           subscription.grace_ends_at ??
           subscription.current_period_end
         : null;
+      const isIndefinite = isIndefiniteAccess(accessUntil);
 
       return {
         id: profile.id,
@@ -248,7 +251,8 @@ export async function getAdminOverview(search = ""): Promise<AdminOverview> {
               planCode: plan?.code ?? "unknown",
               planName: plan?.name ?? "Plan no disponible",
               status: subscription.status,
-              accessUntil,
+              accessUntil: isIndefinite ? null : accessUntil,
+              isIndefinite,
             }
           : null,
       };

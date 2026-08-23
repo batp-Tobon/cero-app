@@ -43,7 +43,7 @@ export default async function DashboardPage() {
 
   return (
     <div className="animate-fade-in">
-      <header className="flex items-center justify-between gap-4 pt-safe">
+      <header className="flex items-center justify-between gap-4">
         <p className="text-base font-semibold tracking-tight">
           {greeting()}, {name}
         </p>

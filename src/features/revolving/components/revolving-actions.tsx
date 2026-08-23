@@ -341,8 +341,8 @@ export function StatementButton({
           <form onSubmit={onSubmit} className="space-y-4">
             {error && <InlineNotice variant="danger">{error}</InlineNotice>}
 
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
+            <div className="grid min-w-0 grid-cols-2 gap-3">
+              <div className="min-w-0 space-y-1.5">
                 <Label htmlFor="statement-date">Fecha de corte</Label>
                 <Input
                   id="statement-date"
@@ -353,7 +353,7 @@ export function StatementButton({
                   disabled={pending}
                 />
               </div>
-              <div className="space-y-1.5">
+              <div className="min-w-0 space-y-1.5">
                 <Label htmlFor="due-date">Límite de pago</Label>
                 <Input
                   id="due-date"
