@@ -6,10 +6,9 @@ import {
 } from "@/infrastructure/supabase/server";
 import { getCreditSummaries } from "@/features/credits/queries";
 import { ProfileSettings } from "@/features/profile/components/profile-settings";
+import { AvatarPicker } from "@/features/profile/components/avatar-picker";
 import { PageHeader } from "@/shared/components/page-header";
-import { Avatar, AvatarFallback, AvatarImage } from "@/shared/ui/avatar";
 import { formatMoney } from "@/shared/lib/format";
-import { initials } from "@/shared/lib/utils";
 import type { Profile } from "@/shared/types/domain";
 
 export const metadata: Metadata = { title: "Perfil" };
@@ -30,6 +29,12 @@ export default async function ProfilePage() {
     email: user.email ?? null,
     full_name: user.email?.split("@")[0] ?? null,
     avatar_url: null,
+    avatar_emoji: null,
+    first_name: null,
+    last_name: null,
+    profession: null,
+    national_id: null,
+    phone: null,
     role: "user",
     currency: "COP",
     locale: "es-CO",
@@ -50,12 +55,11 @@ export default async function ProfilePage() {
       <PageHeader title="Perfil" />
 
       <section className="mt-5 flex flex-col items-center rounded-3xl bg-card px-5 py-7 text-center">
-        <Avatar className="h-20 w-20">
-          {profile.avatar_url && <AvatarImage src={profile.avatar_url} alt="" />}
-          <AvatarFallback className="text-xl">
-            {initials(profile.full_name)}
-          </AvatarFallback>
-        </Avatar>
+        <AvatarPicker
+          name={profile.full_name}
+          avatarUrl={profile.avatar_url}
+          avatarEmoji={profile.avatar_emoji}
+        />
 
         <h2 className="mt-4 title-card">
           {profile.full_name ?? "Sin nombre"}

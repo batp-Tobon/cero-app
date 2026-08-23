@@ -73,7 +73,15 @@ export type ProfileRow = {
   id: string;
   email: string | null;
   full_name: string | null;
+  /** Nombre para mostrar, derivado de first_name + last_name al guardar. */
+  first_name: string | null;
+  last_name: string | null;
+  profession: string | null;
+  national_id: string | null;
+  phone: string | null;
   avatar_url: string | null;
+  /** Alternativa a la foto. Si hay emoji, manda sobre `avatar_url`. */
+  avatar_emoji: string | null;
   role: UserRoleDB;
   currency: string;
   locale: string;
@@ -453,7 +461,10 @@ export type DashboardBudgetRow = {
 };
 
 export type CurrentDashboardSnapshotRow = {
-  profile: Pick<ProfileRow, "full_name" | "avatar_url" | "role"> | null;
+  profile: Pick<
+    ProfileRow,
+    "full_name" | "avatar_url" | "avatar_emoji" | "role"
+  > | null;
   credits: CreditSummaryRow[];
   cards: RevolvingSummaryRow[];
   billing: CurrentBillingContextRow | null;

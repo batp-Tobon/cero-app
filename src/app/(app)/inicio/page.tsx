@@ -61,6 +61,7 @@ export default async function DashboardPage() {
           <UserAvatar
             name={profile?.fullName ?? null}
             avatarUrl={profile?.avatarUrl ?? null}
+            avatarEmoji={profile?.avatarEmoji ?? null}
             href="/perfil"
           />
         </div>

@@ -34,6 +34,7 @@ import {
   updateNotificationPreferences,
   updateProfile,
 } from "@/features/profile/actions";
+import { createClient } from "@/infrastructure/supabase/client";
 import type { Profile } from "@/shared/types/domain";
 
 type Panel = "profile" | "notifications" | "export" | "security" | null;
@@ -48,13 +49,13 @@ export function ProfileSettings({ profile }: { profile: Profile }) {
         <Row
           icon={UserRound}
           label="Datos personales"
-          hint="Nombre y moneda"
+          hint="Nombre, documento y contacto"
           onClick={() => setPanel("profile")}
         />
         <Row
           icon={ShieldCheck}
           label="Seguridad y privacidad"
-          hint="Contraseña y sesión"
+          hint="Cambiar contraseña y cerrar sesión"
           onClick={() => setPanel("security")}
         />
         <Row
@@ -164,6 +165,16 @@ function Row({
   );
 }
 
+/** Reparte un nombre guardado antes de que existieran los dos campos. */
+function splitLegacyName(fullName: string | null): [string, string] {
+  const parts = (fullName ?? "").trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return ["", ""];
+  // Dos apellidos son lo habitual en Colombia, así que a partir de tres
+  // palabras se asume que las dos últimas lo son.
+  if (parts.length >= 3) return [parts.slice(0, -2).join(" "), parts.slice(-2).join(" ")];
+  return [parts[0], parts.slice(1).join(" ")];
+}
+
 function ProfilePanel({
   profile,
   open,
@@ -174,16 +185,27 @@ function ProfilePanel({
   onOpenChange: (v: boolean) => void;
 }) {
   const router = useRouter();
-  const [fullName, setFullName] = React.useState(profile.full_name ?? "");
-  const [currency, setCurrency] = React.useState(profile.currency);
+  const [legacyFirst, legacyLast] = splitLegacyName(profile.full_name);
+  const [form, setForm] = React.useState({
+    firstName: profile.first_name ?? legacyFirst,
+    lastName: profile.last_name ?? legacyLast,
+    profession: profile.profession ?? "",
+    nationalId: profile.national_id ?? "",
+    phone: profile.phone ?? "",
+    currency: profile.currency,
+  });
   const [pending, setPending] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+
+  function set<K extends keyof typeof form>(key: K, value: string) {
+    setForm((current) => ({ ...current, [key]: value }));
+  }
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
     setPending(true);
-    const result = await updateProfile({ fullName, currency });
+    const result = await updateProfile(form);
     setPending(false);
     if (!result.ok) return setError(result.error);
     toast.success("Perfil actualizado");
@@ -202,34 +224,72 @@ function ProfilePanel({
         <form onSubmit={onSubmit} className="space-y-4">
           {error && <InlineNotice variant="danger">{error}</InlineNotice>}
 
-          <div className="space-y-1.5">
-            <Label htmlFor="profile-name">Nombre</Label>
-            <Input
-              id="profile-name"
-              value={fullName}
-              onChange={(e) => setFullName(e.target.value)}
-              maxLength={80}
+          <div className="grid grid-cols-2 gap-3">
+            <Field
+              id="profile-first-name"
+              label="Nombres"
+              value={form.firstName}
+              onChange={(v) => set("firstName", v)}
+              maxLength={60}
               required
+              autoComplete="given-name"
+              disabled={pending}
+            />
+            <Field
+              id="profile-last-name"
+              label="Apellidos"
+              value={form.lastName}
+              onChange={(v) => set("lastName", v)}
+              maxLength={60}
+              autoComplete="family-name"
               disabled={pending}
             />
           </div>
 
-          <div className="space-y-1.5">
-            <Label htmlFor="profile-currency">Moneda</Label>
-            <Input
-              id="profile-currency"
-              value={currency}
-              onChange={(e) => setCurrency(e.target.value.toUpperCase())}
-              maxLength={3}
-              minLength={3}
-              required
-              disabled={pending}
-              aria-describedby="profile-currency-hint"
-            />
-            <p id="profile-currency-hint" className="text-xs text-muted-foreground">
-              Código de tres letras: COP, USD, EUR…
-            </p>
-          </div>
+          <Field
+            id="profile-profession"
+            label="Profesión"
+            value={form.profession}
+            onChange={(v) => set("profession", v)}
+            maxLength={80}
+            autoComplete="organization-title"
+            disabled={pending}
+          />
+
+          <Field
+            id="profile-national-id"
+            label="Documento"
+            value={form.nationalId}
+            onChange={(v) => set("nationalId", v)}
+            maxLength={20}
+            inputMode="numeric"
+            disabled={pending}
+            hint="Sólo lo ves tú. No aparece en el panel de administración."
+          />
+
+          <Field
+            id="profile-phone"
+            label="Teléfono"
+            value={form.phone}
+            onChange={(v) => set("phone", v)}
+            maxLength={25}
+            type="tel"
+            inputMode="tel"
+            autoComplete="tel"
+            disabled={pending}
+          />
+
+          <Field
+            id="profile-currency"
+            label="Moneda"
+            value={form.currency}
+            onChange={(v) => set("currency", v.toUpperCase())}
+            maxLength={3}
+            minLength={3}
+            required
+            disabled={pending}
+            hint="Código de tres letras: COP, USD, EUR…"
+          />
 
           <Button type="submit" className="w-full" disabled={pending}>
             {pending && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}
@@ -241,6 +301,42 @@ function ProfilePanel({
   );
 }
 
+/** Campo de texto con etiqueta y ayuda: se repite seis veces en este panel. */
+function Field({
+  id,
+  label,
+  value,
+  onChange,
+  hint,
+  ...input
+}: {
+  id: string;
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  hint?: string;
+} & Omit<React.ComponentProps<typeof Input>, "id" | "value" | "onChange">) {
+  return (
+    <div className="space-y-1.5">
+      <Label htmlFor={id}>{label}</Label>
+      <Input
+        id={id}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        aria-describedby={hint ? `${id}-hint` : undefined}
+        {...input}
+      />
+      {hint && (
+        <p id={`${id}-hint`} className="text-xs text-muted-foreground">
+          {hint}
+        </p>
+      )}
+    </div>
+  );
+}
+
+const MIN_PASSWORD = 8;
+
 function SecurityPanel({
   email,
   open,
@@ -250,8 +346,78 @@ function SecurityPanel({
   open: boolean;
   onOpenChange: (v: boolean) => void;
 }) {
+  const [current, setCurrent] = React.useState("");
+  const [next, setNext] = React.useState("");
+  const [confirm, setConfirm] = React.useState("");
+  const [pending, setPending] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+
+  function reset() {
+    setCurrent("");
+    setNext("");
+    setConfirm("");
+    setError(null);
+  }
+
+  async function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+
+    if (next.length < MIN_PASSWORD) {
+      setError(`La nueva contraseña debe tener al menos ${MIN_PASSWORD} caracteres.`);
+      return;
+    }
+    if (next !== confirm) {
+      setError("La confirmación no coincide.");
+      return;
+    }
+    if (next === current) {
+      setError("La nueva contraseña debe ser distinta de la actual.");
+      return;
+    }
+    if (!email) {
+      setError("No pudimos identificar tu correo. Vuelve a iniciar sesión.");
+      return;
+    }
+
+    setPending(true);
+    const supabase = createClient();
+
+    // Supabase no pide la contraseña actual para cambiarla. Se comprueba aquí
+    // a propósito: sin este paso, cualquiera que encontrara la sesión abierta
+    // podría cambiarla y dejar fuera al dueño de la cuenta.
+    const { error: reauthError } = await supabase.auth.signInWithPassword({
+      email,
+      password: current,
+    });
+    if (reauthError) {
+      setPending(false);
+      setError("La contraseña actual no es correcta.");
+      return;
+    }
+
+    const { error: updateError } = await supabase.auth.updateUser({
+      password: next,
+    });
+    setPending(false);
+    if (updateError) {
+      setError("No pudimos cambiar la contraseña. Inténtalo de nuevo.");
+      return;
+    }
+
+    reset();
+    toast.success("Contraseña actualizada");
+    onOpenChange(false);
+  }
+
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
+    <Sheet
+      open={open}
+      onOpenChange={(value) => {
+        if (!value) reset();
+        onOpenChange(value);
+      }}
+    >
       <SheetContent>
         <SheetHeader>
           <SheetTitle>Seguridad y privacidad</SheetTitle>
@@ -266,14 +432,57 @@ function SecurityPanel({
             <p className="mt-0.5 truncate text-sm font-medium">{email}</p>
           </div>
 
-          <p className="text-sm leading-relaxed text-muted-foreground">
-            Las contraseñas las gestiona Supabase Auth: CERO nunca las almacena
-            ni puede leerlas. Para cambiarla te enviamos un enlace al correo.
-          </p>
+          <form onSubmit={onSubmit} className="space-y-4">
+            {error && <InlineNotice variant="danger">{error}</InlineNotice>}
 
-          <Button asChild variant="secondary" className="w-full">
-            <Link href="/recuperar">Cambiar contraseña</Link>
-          </Button>
+            <Field
+              id="password-current"
+              label="Contraseña actual"
+              type="password"
+              value={current}
+              onChange={setCurrent}
+              autoComplete="current-password"
+              required
+              disabled={pending}
+            />
+            <Field
+              id="password-next"
+              label="Nueva contraseña"
+              type="password"
+              value={next}
+              onChange={setNext}
+              autoComplete="new-password"
+              minLength={MIN_PASSWORD}
+              required
+              disabled={pending}
+              hint={`Mínimo ${MIN_PASSWORD} caracteres.`}
+            />
+            <Field
+              id="password-confirm"
+              label="Repite la nueva contraseña"
+              type="password"
+              value={confirm}
+              onChange={setConfirm}
+              autoComplete="new-password"
+              minLength={MIN_PASSWORD}
+              required
+              disabled={pending}
+            />
+
+            <Button type="submit" className="w-full" disabled={pending}>
+              {pending && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}
+              Cambiar contraseña
+            </Button>
+          </form>
+
+          <p className="text-xs leading-relaxed text-muted-foreground">
+            CERO nunca almacena ni puede leer tu contraseña: la gestiona
+            Supabase Auth. Si la olvidaste,{" "}
+            <Link href="/recuperar" className="text-primary underline">
+              recupérala por correo
+            </Link>
+            .
+          </p>
         </div>
       </SheetContent>
     </Sheet>

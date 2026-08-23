@@ -35,6 +35,7 @@ export interface DashboardSnapshot {
   profile: {
     fullName: string | null;
     avatarUrl: string | null;
+    avatarEmoji: string | null;
     role: UserRoleDB;
   } | null;
   credits: CreditSummaryRow[];
@@ -59,6 +60,7 @@ export const getDashboardSnapshot = cache(async (): Promise<DashboardSnapshot> =
       ? {
           fullName: snapshot.profile.full_name,
           avatarUrl: snapshot.profile.avatar_url,
+          avatarEmoji: snapshot.profile.avatar_emoji,
           role: snapshot.profile.role,
         }
       : null,
