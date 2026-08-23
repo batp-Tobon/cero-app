@@ -52,7 +52,7 @@ export function PaymentHistory({
   if (payments.length === 0) {
     return (
       <section aria-labelledby="movements" className="mt-8">
-        <h2 id="movements" className="text-base font-semibold tracking-tight">
+        <h2 id="movements" className="title-section">
           Movimientos
         </h2>
         <p className="mt-3 rounded-2xl bg-card p-5 text-sm leading-relaxed text-muted-foreground">
@@ -64,7 +64,7 @@ export function PaymentHistory({
 
   return (
     <section aria-labelledby="movements" className="mt-8">
-      <h2 id="movements" className="text-base font-semibold tracking-tight">
+      <h2 id="movements" className="title-section">
         Movimientos
       </h2>
       <p className="mt-1 text-xs leading-relaxed text-muted-foreground">

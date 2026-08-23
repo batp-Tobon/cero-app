@@ -164,7 +164,7 @@ export function SubscriptionActions({
               <CreditCard className="h-4 w-4" aria-hidden />
             </span>
             <div>
-              <h2 id="online-payment" className="text-sm font-semibold">
+              <h2 id="online-payment" className="title-sub">
                 Pago en línea
               </h2>
               <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
@@ -191,7 +191,7 @@ export function SubscriptionActions({
       <section aria-labelledby="manual-payment" className="rounded-3xl bg-card p-5">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <h2 id="manual-payment" className="text-sm font-semibold">
+            <h2 id="manual-payment" className="title-sub">
               Pago por Bre-B
             </h2>
             <p className="mt-1 text-xs leading-relaxed text-muted-foreground">

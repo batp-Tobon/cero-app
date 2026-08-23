@@ -52,7 +52,7 @@ export function AdminPaymentQr({
 
   return (
     <section aria-labelledby="admin-qr" className="mt-8">
-      <h2 id="admin-qr" className="text-base font-semibold tracking-tight">
+      <h2 id="admin-qr" className="title-section">
         QR de cobro
       </h2>
       <p className="mt-1 text-xs leading-relaxed text-muted-foreground">

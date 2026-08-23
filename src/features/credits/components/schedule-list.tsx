@@ -62,7 +62,7 @@ export function ScheduleList({
 
   return (
     <section aria-labelledby="schedule" className="mt-8">
-      <h2 id="schedule" className="text-base font-semibold tracking-tight">
+      <h2 id="schedule" className="title-section">
         Plan de pagos
       </h2>
 

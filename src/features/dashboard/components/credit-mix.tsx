@@ -18,7 +18,7 @@ export function CreditMix({ slices }: { slices: DebtSlice[] }) {
 
   return (
     <section aria-labelledby="mix" className="mt-9">
-      <h2 id="mix" className="text-base font-semibold tracking-tight">
+      <h2 id="mix" className="title-section">
         Tus deudas
       </h2>
 

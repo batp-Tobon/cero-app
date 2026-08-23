@@ -39,7 +39,7 @@ export function PageHeader({
       )}
 
       <div className={cn("min-w-0 flex-1", centered && "text-center")}>
-        <h1 className="truncate text-base font-semibold tracking-tight">
+        <h1 className="truncate title-section">
           {title}
         </h1>
         {subtitle && (

@@ -25,7 +25,7 @@ export default function AppError({
         <AlertTriangle className="h-6 w-6 text-destructive" aria-hidden />
       </span>
 
-      <h1 className="mt-5 text-base font-semibold">Algo falló al cargar</h1>
+      <h1 className="mt-5 title-section">Algo falló al cargar</h1>
       <p className="mt-2 max-w-[38ch] text-sm leading-relaxed text-muted-foreground">
         No pudimos completar la operación. Revisa tu conexión y vuelve a intentarlo.
       </p>

@@ -48,9 +48,9 @@ export default async function AiInsightsPage() {
           <span className="flex h-14 w-14 items-center justify-center rounded-full bg-secondary text-muted-foreground">
             <LockKeyhole className="h-6 w-6" aria-hidden />
           </span>
-          <h1 className="mt-5 font-serif text-2xl font-semibold">
+          <h2 className="mt-5 title-lead">
             Activa CERO Pro
-          </h1>
+          </h2>
           <p className="mt-2 max-w-xs text-sm leading-relaxed text-muted-foreground">
             El análisis inteligente está disponible durante los 5 días de prueba
             y en el plan Pro.
@@ -94,9 +94,9 @@ export default async function AiInsightsPage() {
         <span className="flex h-11 w-11 items-center justify-center rounded-full bg-primary/15 text-primary">
           <BrainCircuit className="h-5 w-5" aria-hidden />
         </span>
-        <h1 className="mt-4 font-serif text-2xl font-semibold leading-tight">
+        <h2 className="mt-4 title-lead">
           Lectura de tu mes
-        </h1>
+        </h2>
         <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
           Cruza presupuesto, créditos y tarjetas para destacar lo que requiere
           atención ahora.
@@ -126,7 +126,7 @@ export default async function AiInsightsPage() {
       </dl>
 
       <section aria-labelledby="insights" className="mt-8">
-        <h2 id="insights" className="text-base font-semibold tracking-tight">
+        <h2 id="insights" className="title-section">
           Recomendaciones
         </h2>
         <div className="mt-3 space-y-2.5">
@@ -141,7 +141,7 @@ export default async function AiInsightsPage() {
                   insight.tone === "neutral" && "bg-sky-400",
                 )} />
                 <div>
-                  <h3 className="text-sm font-semibold">{insight.title}</h3>
+                  <h3 className="title-sub">{insight.title}</h3>
                   <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
                     {insight.detail}
                   </p>

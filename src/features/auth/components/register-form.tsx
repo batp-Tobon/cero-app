@@ -107,7 +107,7 @@ export function RegisterForm() {
     return (
       <div className="space-y-6 text-center">
         <div className="space-y-2">
-          <h2 className="text-base font-semibold">Confirma tu correo</h2>
+          <h2 className="title-section">Confirma tu correo</h2>
           <p className="text-sm leading-relaxed text-muted-foreground">
             Te enviamos un enlace a{" "}
             <span className="text-foreground">{email}</span>. Ábrelo para

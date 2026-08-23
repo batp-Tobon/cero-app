@@ -32,7 +32,7 @@ export function UpcomingPayments({ items }: { items: UpcomingItem[] }) {
 
   return (
     <section aria-labelledby="upcoming" className="mt-9">
-      <h2 id="upcoming" className="text-base font-semibold tracking-tight">
+      <h2 id="upcoming" className="title-section">
         Próximos pagos
       </h2>
 

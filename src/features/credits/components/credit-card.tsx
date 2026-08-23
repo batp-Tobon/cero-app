@@ -47,7 +47,7 @@ export function CreditCard({
           <ProductBadge icon={Icon} color={credit.color} />
 
           <div className="min-w-0 flex-1">
-            <h3 className="truncate text-sm font-semibold">{credit.name}</h3>
+            <h3 className="truncate title-sub">{credit.name}</h3>
             <p className="truncate text-xs text-muted-foreground">{subtitle}</p>
           </div>
 

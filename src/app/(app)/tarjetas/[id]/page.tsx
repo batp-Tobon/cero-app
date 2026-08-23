@@ -160,7 +160,7 @@ export default async function RevolvingDetailPage({ params }: Params) {
       </div>
 
       <section aria-labelledby="movements" className="mt-8">
-        <h2 id="movements" className="text-base font-semibold tracking-tight">
+        <h2 id="movements" className="title-section">
           Movimientos
         </h2>
 
@@ -168,7 +168,7 @@ export default async function RevolvingDetailPage({ params }: Params) {
       </section>
 
       <section className="mt-8 rounded-3xl bg-card p-5">
-        <h2 className="text-base font-semibold tracking-tight">Detalle</h2>
+        <h2 className="title-section">Detalle</h2>
         <dl className="mt-4 space-y-3 text-sm">
           <div className="flex items-baseline justify-between gap-4">
             <dt className="text-muted-foreground">Cupo total</dt>

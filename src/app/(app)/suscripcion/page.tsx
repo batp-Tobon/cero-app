@@ -78,9 +78,9 @@ export default async function SubscriptionPage({
         <p className="mt-5 eyebrow-sm eyebrow-accent">
           Tu cuenta
         </p>
-        <h1 className="mt-1 font-serif text-3xl font-semibold leading-tight">
+        <h2 className="mt-1 title-hero">
           {STATUS_COPY[data.entitlement.reason]}
-        </h1>
+        </h2>
         {accessDate && (
           <p className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground">
             <Clock3 className="h-3.5 w-3.5" aria-hidden />
@@ -92,7 +92,7 @@ export default async function SubscriptionPage({
       <section aria-labelledby="pro-plan" className="my-5 rounded-3xl bg-card p-5">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h2 id="pro-plan" className="text-base font-semibold">
+            <h2 id="pro-plan" className="title-section">
               {data.offer.plan.name}
             </h2>
             <p className="mt-1 text-xs leading-relaxed text-muted-foreground">

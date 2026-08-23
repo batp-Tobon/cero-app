@@ -101,7 +101,7 @@ function SectionTitle({
 }) {
   return (
     <div className="flex items-center justify-between gap-4">
-      <h2 id={id} className="text-base font-semibold tracking-tight">
+      <h2 id={id} className="title-section">
         {title}
       </h2>
       {onAdd ? (

@@ -32,7 +32,7 @@ export function SectionTitle({
   return (
     <div className="flex min-h-9 items-center justify-between gap-3">
       <div>
-        <h2 id={id} className="text-base font-semibold tracking-tight">
+        <h2 id={id} className="title-section">
           {title}
         </h2>
         <span className="text-xs text-muted-foreground">{detail}</span>

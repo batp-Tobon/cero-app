@@ -57,7 +57,7 @@ export default async function ProfilePage() {
           </AvatarFallback>
         </Avatar>
 
-        <h2 className="mt-4 text-lg font-semibold tracking-tight">
+        <h2 className="mt-4 title-card">
           {profile.full_name ?? "Sin nombre"}
         </h2>
         <p className="mt-0.5 text-sm text-muted-foreground">{profile.email}</p>

@@ -39,7 +39,7 @@ function PlanCard({ plan }: { plan: AdminPlan }) {
       <div className="flex items-start justify-between gap-3">
         <div>
           <div className="flex flex-wrap items-center gap-1.5">
-            <h3 className="text-sm font-semibold">{plan.name}</h3>
+            <h3 className="title-sub">{plan.name}</h3>
             <Badge variant={plan.isPublic ? "success" : "outline"}>
               {plan.isPublic ? "Visible" : "Oculto"}
             </Badge>

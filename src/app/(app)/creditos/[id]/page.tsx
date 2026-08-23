@@ -176,7 +176,7 @@ export default async function CreditDetailPage({ params }: Params) {
       <PaymentHistory payments={payments} currency={credit.currency} />
 
       <section className="mt-8 rounded-3xl bg-card p-5">
-        <h2 className="text-base font-semibold tracking-tight">
+        <h2 className="title-section">
           Detalle del crédito
         </h2>
         <dl className="mt-4 space-y-3 text-sm">

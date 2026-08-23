@@ -36,7 +36,7 @@ export function RevolvingCard({ account }: { account: RevolvingSummary }) {
           <ProductBadge icon={Icon} color={account.color} />
 
           <div className="min-w-0 flex-1">
-            <h3 className="truncate text-sm font-semibold">{account.name}</h3>
+            <h3 className="truncate title-sub">{account.name}</h3>
             <p className="truncate text-xs text-muted-foreground">
               {[account.entity, account.last_four && `•••• ${account.last_four}`]
                 .filter(Boolean)

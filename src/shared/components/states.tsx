@@ -32,7 +32,7 @@ export function EmptyState({
       <span className="flex h-14 w-14 items-center justify-center rounded-full bg-secondary">
         <Icon className="h-6 w-6 text-muted-foreground" aria-hidden />
       </span>
-      <h3 className="mt-5 text-base font-semibold">{title}</h3>
+      <h3 className="mt-5 title-section">{title}</h3>
       <p className="mt-2 max-w-[34ch] text-sm leading-relaxed text-muted-foreground">
         {description}
       </p>
@@ -71,7 +71,7 @@ export function ErrorState({
       <span className="flex h-14 w-14 items-center justify-center rounded-full bg-destructive/15">
         <AlertTriangle className="h-6 w-6 text-destructive" aria-hidden />
       </span>
-      <h3 className="mt-5 text-base font-semibold">{title}</h3>
+      <h3 className="mt-5 title-section">{title}</h3>
       {visibleDetail ? (
         <p className="mt-2 max-w-[38ch] text-sm leading-relaxed text-muted-foreground">
           {visibleDetail}

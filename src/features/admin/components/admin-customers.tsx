@@ -274,7 +274,7 @@ function CustomerManager({
 
         <div className="space-y-5">
           <section aria-labelledby={`subscription-${customer.id}`}>
-            <h3 id={`subscription-${customer.id}`} className="text-sm font-semibold">
+            <h3 id={`subscription-${customer.id}`} className="title-sub">
               Suscripción
             </h3>
             <div className="mt-3 space-y-3">
@@ -376,7 +376,7 @@ function CustomerManager({
           </section>
 
           <section className="border-t border-border pt-5" aria-labelledby={`role-${customer.id}`}>
-            <h3 id={`role-${customer.id}`} className="text-sm font-semibold">
+            <h3 id={`role-${customer.id}`} className="title-sub">
               Permisos del backoffice
             </h3>
             <p className="mt-1 text-xs leading-relaxed text-muted-foreground">

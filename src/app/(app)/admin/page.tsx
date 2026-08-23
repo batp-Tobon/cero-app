@@ -59,7 +59,7 @@ export default async function AdminPage({
           <p className="eyebrow-sm eyebrow-accent">
             Backoffice CERO
           </p>
-          <h1 className="mt-1 font-serif text-3xl font-semibold leading-none tracking-tight">
+          <h1 className="mt-1 title-hero">
             Administración
           </h1>
           <p className="mt-2 max-w-xs text-xs leading-relaxed text-muted-foreground">
@@ -77,7 +77,7 @@ export default async function AdminPage({
 
       <section aria-labelledby="admin-plans" className="mt-8">
         <div className="flex items-baseline justify-between gap-3">
-          <h2 id="admin-plans" className="text-base font-semibold tracking-tight">
+          <h2 id="admin-plans" className="title-section">
             Planes y precio
           </h2>
           <span className="text-xs text-muted-foreground">Editables</span>
@@ -87,7 +87,7 @@ export default async function AdminPage({
 
       <section aria-labelledby="admin-customers" className="mt-8">
         <div className="flex items-baseline justify-between gap-3">
-          <h2 id="admin-customers" className="text-base font-semibold tracking-tight">
+          <h2 id="admin-customers" className="title-section">
             Clientes
           </h2>
           <span className="text-xs text-muted-foreground">

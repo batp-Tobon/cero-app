@@ -34,7 +34,7 @@ export default function HelpPage() {
       <div className="mt-6 space-y-2.5">
         {TOPICS.map(({ title, body }) => (
           <section key={title} className="rounded-3xl bg-card p-5">
-            <h2 className="text-sm font-semibold">{title}</h2>
+            <h2 className="title-sub">{title}</h2>
             <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
               {body}
             </p>

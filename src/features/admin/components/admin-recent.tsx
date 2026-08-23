@@ -35,7 +35,7 @@ export function AdminRecent({
     <div className="mt-8 space-y-8">
       <section aria-labelledby="recent-payments">
         <div className="flex items-baseline justify-between gap-3">
-          <h2 id="recent-payments" className="text-base font-semibold tracking-tight">
+          <h2 id="recent-payments" className="title-section">
             Pagos SaaS
           </h2>
           <span className="text-xs text-muted-foreground">Últimos movimientos</span>
@@ -82,7 +82,7 @@ export function AdminRecent({
 
       <section aria-labelledby="recent-audit">
         <div className="flex items-baseline justify-between gap-3">
-          <h2 id="recent-audit" className="text-base font-semibold tracking-tight">
+          <h2 id="recent-audit" className="title-section">
             Auditoría
           </h2>
           <span className="text-xs text-muted-foreground">Inmutable</span>

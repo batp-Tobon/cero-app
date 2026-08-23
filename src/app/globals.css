@@ -122,6 +122,30 @@
     @apply text-primary;
   }
 
+  /* Titulares. Una sola escala para toda la app: antes cada pantalla elegía
+     su tamaño y cuatro cabeceras llevaban `font-serif`, una familia que ni
+     siquiera está cargada —sólo hay Inter— así que caían al serif del sistema
+     y se veían de otra tipografía. */
+  .title-hero {
+    @apply text-3xl font-semibold leading-none tracking-tight;
+  }
+  /* Titular dentro de una tarjeta destacada. */
+  .title-lead {
+    @apply text-2xl font-semibold leading-tight tracking-tight;
+  }
+  /* Título de diálogo y nombre de perfil. */
+  .title-card {
+    @apply text-lg font-semibold tracking-tight;
+  }
+  /* Cabecera de pantalla y de sección: el caso más común con diferencia. */
+  .title-section {
+    @apply text-base font-semibold tracking-tight;
+  }
+  /* Sub-cabecera dentro de una tarjeta. */
+  .title-sub {
+    @apply text-sm font-semibold tracking-tight;
+  }
+
   /* Cifras de dinero. Siempre tabulares: sin ellas los importes bailan al
      actualizarse, porque el 1 es más estrecho que los demás dígitos. */
   .figure-hero {
