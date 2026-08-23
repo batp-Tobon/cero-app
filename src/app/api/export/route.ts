@@ -5,9 +5,15 @@ import { toCsv } from "@/core/csv";
 
 export const dynamic = "force-dynamic";
 
-type Dataset = "creditos" | "cronogramas" | "pagos" | "actividad";
+type Dataset = "creditos" | "cronogramas" | "pagos" | "actividad" | "ahorros";
 
-const DATASETS: Dataset[] = ["creditos", "cronogramas", "pagos", "actividad"];
+const DATASETS: Dataset[] = [
+  "creditos",
+  "cronogramas",
+  "pagos",
+  "actividad",
+  "ahorros",
+];
 
 /**
  * Exporta los datos del usuario en CSV. Las RLS acotan las filas, así que
@@ -159,6 +165,37 @@ export async function GET(request: Request) {
           a.credits?.name,
           a.description,
           a.amount,
+        ]),
+      );
+      break;
+    }
+
+    case "ahorros": {
+      const { data, error } = await supabase
+        .from("savings_movements")
+        .select("*, savings_pockets(name)")
+        .order("movement_date", { ascending: false })
+        .order("created_at", { ascending: false });
+      if (error) throw new Error(error.message);
+      type Row = (typeof data)[number] & {
+        savings_pockets: { name: string } | null;
+      };
+      csv = toCsv(
+        [
+          "bolsillo",
+          "fecha",
+          "tipo",
+          "valor",
+          "mes_origen",
+          "descripcion",
+        ],
+        ((data ?? []) as unknown as Row[]).map((movement) => [
+          movement.savings_pockets?.name,
+          movement.movement_date,
+          movement.kind,
+          movement.amount,
+          movement.source_month,
+          movement.description,
         ]),
       );
       break;

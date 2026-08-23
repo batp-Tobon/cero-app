@@ -2,13 +2,21 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Activity, Home, PiggyBank, User, Wallet } from "lucide-react";
+import {
+  Activity,
+  CircleDollarSign,
+  Home,
+  PiggyBank,
+  User,
+  Wallet,
+} from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 
 const ITEMS = [
   { href: "/inicio", label: "Inicio", icon: Home },
   { href: "/creditos", label: "Créditos", icon: Wallet },
-  { href: "/presupuesto", label: "Presupuesto", icon: PiggyBank },
+  { href: "/presupuesto", label: "Plan", icon: CircleDollarSign },
+  { href: "/ahorros", label: "Ahorros", icon: PiggyBank },
   { href: "/actividad", label: "Actividad", icon: Activity },
   { href: "/perfil", label: "Perfil", icon: User },
 ] as const;

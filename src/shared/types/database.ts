@@ -32,6 +32,10 @@ export type RevolvingKindDB = "credit_card" | "credit_line";
 export type RevolvingStatusDB = "active" | "closed";
 export type StatementStatusDB = "open" | "paid" | "overdue";
 export type MovementKindDB = "charge" | "payment" | "interest" | "fee";
+export type SavingsMovementKindDB =
+  | "deposit"
+  | "withdrawal"
+  | "budget_surplus";
 export type BudgetExpenseCategoryDB =
   | "housing"
   | "food"
@@ -264,6 +268,73 @@ export type BudgetExpenseRow = {
   updated_at: string;
 }
 
+export type SavingsPocketRow = {
+  id: string;
+  user_id: string;
+  name: string;
+  currency: string;
+  goal_amount: number | null;
+  color: AccentColorDB;
+  icon: string | null;
+  is_default: boolean;
+  archived_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type SavingsMovementRow = {
+  id: string;
+  pocket_id: string;
+  user_id: string;
+  kind: SavingsMovementKindDB;
+  amount: number;
+  movement_date: string;
+  source_month: string | null;
+  description: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type SavingsPocketSnapshotRow = Pick<
+  SavingsPocketRow,
+  | "id"
+  | "name"
+  | "currency"
+  | "goal_amount"
+  | "color"
+  | "icon"
+  | "is_default"
+  | "created_at"
+> & {
+  balance: number;
+  balance_at_month_end: number;
+  month_net: number;
+};
+
+export type SavingsMovementSnapshotRow = Pick<
+  SavingsMovementRow,
+  | "id"
+  | "pocket_id"
+  | "kind"
+  | "amount"
+  | "movement_date"
+  | "source_month"
+  | "description"
+  | "created_at"
+> & { pocket_name: string };
+
+export type SavingsSnapshotRow = {
+  month: string;
+  currency: string;
+  budget_saved: boolean;
+  total_balance: number;
+  balance_at_month_end: number;
+  month_net: number;
+  automatic_surplus: number;
+  pockets: SavingsPocketSnapshotRow[];
+  movements: SavingsMovementSnapshotRow[];
+};
+
 export type SaasPlanRow = {
   id: string;
   code: string;
@@ -375,6 +446,10 @@ export type DashboardBudgetRow = {
   source: "saved" | "projected" | "empty";
   currency: string | null;
   incomes: Array<Pick<BudgetIncomeRow, "name" | "amount" | "received_date">>;
+  /** Gastos del hogar del mes, ya sumados en la base. */
+  expense_total: number;
+  /** Cuotas y extractos que vencen en el mes, por su importe completo. */
+  obligation_total: number;
 };
 
 export type CurrentDashboardSnapshotRow = {
@@ -656,6 +731,20 @@ export type Database = {
           Generated | "category" | "due_day" | "recurring" | "position"
         >
       >;
+      savings_pockets: Table<
+        SavingsPocketRow,
+        Insertable<
+          SavingsPocketRow,
+          Generated | "goal_amount" | "color" | "icon" | "is_default" | "archived_at"
+        >
+      >;
+      savings_movements: Table<
+        SavingsMovementRow,
+        Insertable<
+          SavingsMovementRow,
+          Generated | "movement_date" | "source_month" | "description"
+        >
+      >;
       saas_plans: Table<
         SaasPlanRow,
         Insertable<
@@ -780,6 +869,35 @@ export type Database = {
         };
         Returns: string;
       };
+      create_savings_pocket: {
+        Args: {
+          p_name: string;
+          p_currency: string;
+          p_initial_amount: number;
+          p_goal_amount: number | null;
+          p_color: AccentColorDB;
+          p_icon: string;
+        };
+        Returns: string;
+      };
+      register_savings_movement: {
+        Args: {
+          p_pocket_id: string;
+          p_kind: SavingsMovementKindDB;
+          p_amount: number;
+          p_movement_date: string;
+          p_description: string | null;
+        };
+        Returns: string;
+      };
+      sync_budget_surpluses: {
+        Args: { p_through_month: string };
+        Returns: undefined;
+      };
+      savings_snapshot: {
+        Args: { p_month: string };
+        Returns: SavingsSnapshotRow;
+      };
       find_profile_by_email: {
         Args: { p_email: string };
         Returns: { id: string; full_name: string | null; email: string | null }[];
@@ -901,6 +1019,7 @@ export type Database = {
       revolving_status: RevolvingStatusDB;
       statement_status: StatementStatusDB;
       movement_kind: MovementKindDB;
+      savings_movement_kind: SavingsMovementKindDB;
       budget_expense_category: BudgetExpenseCategoryDB;
       saas_subscription_status: SaasSubscriptionStatusDB;
       saas_billing_interval: SaasBillingIntervalDB;

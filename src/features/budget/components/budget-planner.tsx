@@ -1,13 +1,9 @@
 "use client";
 
 import * as React from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  CalendarDays,
   Check,
-  ChevronLeft,
-  ChevronRight,
   CircleDollarSign,
   Loader2,
 } from "lucide-react";
@@ -15,10 +11,11 @@ import { toast } from "sonner";
 import { calculateBudget } from "@/core/budget";
 import { saveMonthlyBudget } from "@/features/budget/actions";
 import type { BudgetSnapshot } from "@/features/budget/types";
+import { MonthNavigation } from "@/shared/components/month-navigation";
 import { PageHeader } from "@/shared/components/page-header";
 import { InlineNotice } from "@/shared/components/states";
 import { Button } from "@/shared/ui/button";
-import { addMonths, formatMonthTitle } from "@/shared/lib/dates";
+import { formatMonthTitle } from "@/shared/lib/dates";
 import { formatMoney } from "@/shared/lib/format";
 import {
   ExpenseEntrySheet,
@@ -156,7 +153,7 @@ export function BudgetPlanner({ snapshot }: { snapshot: BudgetSnapshot }) {
           </span>
         }
       />
-      <MonthNavigation month={snapshot.month} />
+      <MonthNavigation month={snapshot.month} basePath="/presupuesto" />
 
       <BudgetSummaryCard
         totals={totals}
@@ -273,36 +270,5 @@ export function BudgetPlanner({ snapshot }: { snapshot: BudgetSnapshot }) {
         onClose={() => setExpenseDraft(null)}
       />
     </form>
-  );
-}
-
-function MonthNavigation({ month }: { month: string }) {
-  const previous = addMonths(month, -1);
-  const next = addMonths(month, 1);
-
-  return (
-    <nav
-      aria-label="Cambiar mes"
-      className="mt-5 flex items-center justify-between rounded-2xl bg-card p-1.5"
-    >
-      <Link
-        href={`/presupuesto?mes=${previous}`}
-        aria-label={`Ver ${formatMonthTitle(previous)}`}
-        className="flex h-10 w-10 items-center justify-center rounded-xl text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-      >
-        <ChevronLeft className="h-5 w-5" aria-hidden />
-      </Link>
-      <span className="flex items-center gap-2 text-sm font-semibold">
-        <CalendarDays className="h-4 w-4 text-primary" aria-hidden />
-        {formatMonthTitle(month)}
-      </span>
-      <Link
-        href={`/presupuesto?mes=${next}`}
-        aria-label={`Ver ${formatMonthTitle(next)}`}
-        className="flex h-10 w-10 items-center justify-center rounded-xl text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-      >
-        <ChevronRight className="h-5 w-5" aria-hidden />
-      </Link>
-    </nav>
   );
 }

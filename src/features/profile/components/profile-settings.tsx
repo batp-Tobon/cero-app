@@ -368,6 +368,7 @@ const EXPORTS = [
   { tipo: "creditos", label: "Créditos", hint: "Saldo y progreso de cada uno" },
   { tipo: "cronogramas", label: "Planes de pago", hint: "Todas las cuotas" },
   { tipo: "pagos", label: "Pagos", hint: "Pagos y abonos registrados" },
+  { tipo: "ahorros", label: "Ahorros", hint: "Bolsillos, entradas y retiros" },
   { tipo: "actividad", label: "Actividad", hint: "Línea de tiempo completa" },
 ] as const;
 
