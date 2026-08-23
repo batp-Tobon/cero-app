@@ -31,6 +31,8 @@ export function LoginForm() {
   const params = useSearchParams();
   const redirectTo = safeInternalPath(params.get("redirect"));
   const expired = params.get("motivo") === "sesion";
+  const confirmed = params.get("motivo") === "confirmado";
+  const invalidLink = params.get("motivo") === "enlace";
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -73,6 +75,16 @@ export function LoginForm() {
       {expired && !error && (
         <InlineNotice variant="warning">
           Tu sesión expiró. Vuelve a iniciar sesión para continuar.
+        </InlineNotice>
+      )}
+      {confirmed && !error && (
+        <InlineNotice>
+          Correo confirmado. Ya puedes iniciar sesión con tu contraseña.
+        </InlineNotice>
+      )}
+      {invalidLink && !error && (
+        <InlineNotice variant="warning">
+          El enlace no es válido o ya venció. Solicita uno nuevo.
         </InlineNotice>
       )}
       {error && <InlineNotice variant="danger">{error}</InlineNotice>}

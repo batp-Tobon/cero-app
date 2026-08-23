@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/infrastructure/supabase/server";
+import { isPasswordRecoveryDestination } from "@/features/auth/callback";
 import { safeInternalPath } from "@/shared/lib/navigation";
 
 /**
@@ -14,7 +15,18 @@ export async function GET(request: Request) {
   if (code) {
     const supabase = await createClient();
     const { error } = await supabase.auth.exchangeCodeForSession(code);
-    if (!error) return NextResponse.redirect(`${origin}${next}`);
+    if (!error) {
+      // Recuperación necesita conservar la sesión temporal para cambiar la
+      // contraseña. La confirmación de alta, en cambio, termina en login: así
+      // el usuario ve que su correo fue validado y entra conscientemente con
+      // sus credenciales, sin quedar autenticado sólo por abrir el enlace.
+      if (isPasswordRecoveryDestination(next)) {
+        return NextResponse.redirect(`${origin}${next}`);
+      }
+
+      await supabase.auth.signOut({ scope: "local" });
+      return NextResponse.redirect(`${origin}/login?motivo=confirmado`);
+    }
   }
 
   return NextResponse.redirect(`${origin}/login?motivo=enlace`);

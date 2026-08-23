@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { ArrowRight, Loader2, Lock, Mail, UserRound } from "lucide-react";
 import { createClient } from "@/infrastructure/supabase/client";
 import { Button } from "@/shared/ui/button";
@@ -26,14 +25,18 @@ function registerErrorMessage(message: string): string {
 }
 
 export function RegisterForm() {
-  const router = useRouter();
-
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [checkEmail, setCheckEmail] = useState(false);
+  const [resending, setResending] = useState(false);
+  const [resendMessage, setResendMessage] = useState<string | null>(null);
+
+  const confirmationRedirect = `${env.appUrl}/auth/callback?next=${encodeURIComponent(
+    "/suscripcion?bienvenida=1",
+  )}`;
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -55,9 +58,7 @@ export function RegisterForm() {
       password,
       options: {
         data: { full_name: fullName.trim() },
-        emailRedirectTo: `${env.appUrl}/auth/callback?next=${encodeURIComponent(
-          "/suscripcion?bienvenida=1",
-        )}`,
+        emailRedirectTo: confirmationRedirect,
       },
     });
 
@@ -67,16 +68,39 @@ export function RegisterForm() {
       return;
     }
 
-    // Con la confirmación por correo activada en Supabase no llega sesión:
-    // la cuenta existe pero hay que verificar el correo antes de entrar.
-    if (!data.session) {
-      setCheckEmail(true);
+    // Una alta segura no debe dejar una sesión local abierta antes de que el
+    // flujo de confirmación haya terminado. Esto contiene una configuración
+    // remota incorrecta y evita el acceso automático desde este formulario.
+    if (data.session) {
+      await supabase.auth.signOut({ scope: "local" });
+      setError(
+        "No pudimos exigir la confirmación del correo. La cuenta no quedó abierta; inténtalo más tarde.",
+      );
       setLoading(false);
       return;
     }
 
-    router.replace("/suscripcion?bienvenida=1");
-    router.refresh();
+    setCheckEmail(true);
+    setLoading(false);
+  }
+
+  async function resendConfirmation() {
+    setResending(true);
+    setResendMessage(null);
+
+    const supabase = createClient();
+    const { error: resendError } = await supabase.auth.resend({
+      type: "signup",
+      email: email.trim(),
+      options: { emailRedirectTo: confirmationRedirect },
+    });
+
+    setResendMessage(
+      resendError
+        ? registerErrorMessage(resendError.message)
+        : "Correo reenviado. Revisa también Spam o Promociones.",
+    );
+    setResending(false);
   }
 
   if (checkEmail) {
@@ -90,6 +114,17 @@ export function RegisterForm() {
             activar tu cuenta y entrar en CERO.
           </p>
         </div>
+        {resendMessage && <InlineNotice>{resendMessage}</InlineNotice>}
+        <Button
+          type="button"
+          variant="secondary"
+          className="w-full"
+          onClick={resendConfirmation}
+          disabled={resending}
+        >
+          {resending && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}
+          Reenviar correo
+        </Button>
         <Button asChild variant="secondary" className="w-full">
           <Link href="/login">Volver a iniciar sesión</Link>
         </Button>
