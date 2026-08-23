@@ -365,11 +365,24 @@ export type CurrentBillingContextRow = {
   grace_ends_at: string | null;
 };
 
+/**
+ * El sueldo del mes tal y como lo devuelve el snapshot de Inicio. `source`
+ * distingue lo guardado de lo arrastrado desde un mes anterior: sin ese dato
+ * la pantalla presentaría una proyección como si fuera un ingreso confirmado.
+ */
+export type DashboardBudgetRow = {
+  month: string;
+  source: "saved" | "projected" | "empty";
+  currency: string | null;
+  incomes: Array<Pick<BudgetIncomeRow, "name" | "amount" | "received_date">>;
+};
+
 export type CurrentDashboardSnapshotRow = {
   profile: Pick<ProfileRow, "full_name" | "avatar_url" | "role"> | null;
   credits: CreditSummaryRow[];
   cards: RevolvingSummaryRow[];
   billing: CurrentBillingContextRow | null;
+  budget: DashboardBudgetRow;
 };
 
 export type CurrentSubscriptionSnapshotRow = {
@@ -818,7 +831,7 @@ export type Database = {
         Returns: CurrentBillingContextRow[];
       };
       current_dashboard_snapshot: {
-        Args: Record<string, never>;
+        Args: { p_month?: string | null };
         Returns: CurrentDashboardSnapshotRow;
       };
       current_subscription_snapshot: {

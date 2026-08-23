@@ -7,6 +7,7 @@ import { getDashboardSnapshot } from "@/features/dashboard/queries";
 import { DebtSummary } from "@/features/dashboard/components/debt-summary";
 import { UpcomingPayments } from "@/features/dashboard/components/upcoming-payments";
 import { MonthSummary } from "@/features/dashboard/components/month-summary";
+import { IncomeSummary } from "@/features/dashboard/components/income-summary";
 import { CreditMix } from "@/features/dashboard/components/credit-mix";
 import { UserAvatar } from "@/shared/components/user-avatar";
 import { EmptyState, ErrorState } from "@/shared/components/states";
@@ -32,7 +33,7 @@ export default async function DashboardPage() {
     );
   }
 
-  const { profile, credits: summaries, cards, entitlement } = snapshot;
+  const { profile, credits: summaries, cards, entitlement, budget } = snapshot;
 
   const overview = buildOverview(summaries, cards);
   const upcoming = buildUpcoming(summaries, cards);
@@ -64,6 +65,10 @@ export default async function DashboardPage() {
           />
         </div>
       </header>
+
+      {/* El sueldo va antes que la deuda, y también cuando aún no hay créditos:
+          saber con cuánto se cuenta no depende de deber algo. */}
+      <IncomeSummary budget={budget} />
 
       {summaries.length === 0 && cards.length === 0 ? (
         <EmptyState
