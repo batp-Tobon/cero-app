@@ -40,6 +40,10 @@ create policy payment_qr_read on storage.objects
 -- Escritura: sólo administradores. Quien pueda cambiar este archivo puede
 -- redirigir los cobros a otra cuenta, así que es la política más restrictiva
 -- del proyecto.
+--
+-- El helper vive en `private`, no en `public`: la Data API sólo expone `public`,
+-- así que dejarlo ahí permitiría a cualquier cliente invocarlo por HTTP. La
+-- migración 20260822170017 hizo ese traslado y borró `public.is_admin()`.
 -- ---------------------------------------------------------------------------
 drop policy if exists payment_qr_write on storage.objects;
 drop policy if exists payment_qr_update on storage.objects;
@@ -47,13 +51,13 @@ drop policy if exists payment_qr_delete on storage.objects;
 
 create policy payment_qr_write on storage.objects
   for insert to authenticated
-  with check (bucket_id = 'payment-qr' and public.is_admin());
+  with check (bucket_id = 'payment-qr' and (select private.is_admin()));
 
 create policy payment_qr_update on storage.objects
   for update to authenticated
-  using (bucket_id = 'payment-qr' and public.is_admin())
-  with check (bucket_id = 'payment-qr' and public.is_admin());
+  using (bucket_id = 'payment-qr' and (select private.is_admin()))
+  with check (bucket_id = 'payment-qr' and (select private.is_admin()));
 
 create policy payment_qr_delete on storage.objects
   for delete to authenticated
-  using (bucket_id = 'payment-qr' and public.is_admin());
+  using (bucket_id = 'payment-qr' and (select private.is_admin()));
