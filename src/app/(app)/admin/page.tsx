@@ -4,6 +4,10 @@ import { notFound } from "next/navigation";
 import { ArrowLeft, Search, ShieldCheck } from "lucide-react";
 import { getCurrentProfile } from "@/infrastructure/supabase/server";
 import { getAdminOverview } from "@/features/admin/queries";
+import { AdminPaymentQr } from "@/features/admin/components/admin-payment-qr";
+import { getBankQrUrl } from "@/features/billing/payment-qr";
+import { billingConfig } from "@/features/billing/config";
+import { createClient } from "@/infrastructure/supabase/server";
 import { AdminCustomers } from "@/features/admin/components/admin-customers";
 import { AdminRecent } from "@/features/admin/components/admin-recent";
 import { AdminStats } from "@/features/admin/components/admin-stats";
@@ -24,8 +28,14 @@ export default async function AdminPage({
 
   const { q = "" } = await searchParams;
   let overview;
+  let bankQrUrl: string | null = null;
   try {
-    overview = await getAdminOverview(q);
+    // En paralelo: el QR vive en Storage y no depende del resumen.
+    const supabase = await createClient();
+    [overview, bankQrUrl] = await Promise.all([
+      getAdminOverview(q),
+      getBankQrUrl(supabase),
+    ]);
   } catch (error) {
     return (
       <ErrorState detail={error instanceof Error ? error.message : undefined} />
@@ -116,6 +126,11 @@ export default async function AdminPage({
           </p>
         )}
       </section>
+
+      <AdminPaymentQr
+        currentUrl={bankQrUrl}
+        generatedFromLink={Boolean(billingConfig.paymentLink)}
+      />
 
       <AdminRecent payments={overview.payments} audit={overview.audit} />
     </div>

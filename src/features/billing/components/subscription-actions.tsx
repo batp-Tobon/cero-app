@@ -9,12 +9,15 @@ import {
   FileUp,
   Loader2,
   MessageCircle,
+  Download,
+  ExternalLink,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
   createWompiCheckout,
   submitManualPayment,
 } from "@/features/billing/actions";
+import type { PaymentCodes } from "@/features/billing/payment-qr";
 import { RECEIPT_ACCEPT } from "@/features/receipts/constants";
 import { RECEIPT_MAX_BYTES } from "@/features/receipts/constants";
 import { createClient } from "@/infrastructure/supabase/client";
@@ -28,6 +31,8 @@ export function SubscriptionActions({
   amountLabel,
   wompiEnabled,
   paymentKey,
+  paymentLink,
+  codes,
   supportWhatsapp,
   hasPendingManualPayment,
   processingReturn,
@@ -36,6 +41,9 @@ export function SubscriptionActions({
   amountLabel: string;
   wompiEnabled: boolean;
   paymentKey: string;
+  /** Link que abre el cobro por PSE. Vacío si no está configurado. */
+  paymentLink: string;
+  codes: PaymentCodes;
   supportWhatsapp: string;
   hasPendingManualPayment: boolean;
   processingReturn: boolean;
@@ -46,6 +54,22 @@ export function SubscriptionActions({
   const [fileName, setFileName] = React.useState("");
   const [proofFile, setProofFile] = React.useState<File | null>(null);
   const [reference, setReference] = React.useState("");
+
+  /**
+   * Descarga el QR como SVG. Se arma en el navegador desde el mismo marcado
+   * que ya se está mostrando, así que no hay una segunda fuente que pueda
+   * quedar desalineada con lo que el usuario ve.
+   */
+  function downloadQr() {
+    if (!codes.qrSvg) return;
+    const blob = new Blob([codes.qrSvg], { type: "image/svg+xml" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = "cero-pago-qr.svg";
+    anchor.click();
+    URL.revokeObjectURL(url);
+  }
 
   function payOnline() {
     startPaying(async () => {
@@ -131,34 +155,38 @@ export function SubscriptionActions({
         </InlineNotice>
       )}
 
+      {/* Sin Wompi configurado la tarjeta no se muestra: un botón muerto que
+          dice "por configurar" no le sirve a quien viene a pagar. */}
+      {wompiEnabled && (
       <section aria-labelledby="online-payment" className="rounded-3xl bg-card p-5">
-        <div className="flex items-start gap-3">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/15 text-primary">
-            <CreditCard className="h-4 w-4" aria-hidden />
-          </span>
-          <div>
-            <h2 id="online-payment" className="text-sm font-semibold">
-              Pago en línea
-            </h2>
-            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-              Tarjeta, PSE, Nequi o Bancolombia. Wompi confirma y activa el plan automáticamente.
-            </p>
+          <div className="flex items-start gap-3">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/15 text-primary">
+              <CreditCard className="h-4 w-4" aria-hidden />
+            </span>
+            <div>
+              <h2 id="online-payment" className="text-sm font-semibold">
+                Pago en línea
+              </h2>
+              <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                Tarjeta, PSE, Nequi o Bancolombia. Wompi confirma y activa el plan automáticamente.
+              </p>
+            </div>
           </div>
-        </div>
-        <Button
-          type="button"
-          className="mt-4 w-full"
-          onClick={payOnline}
-          disabled={!wompiEnabled || paying}
-        >
-          {paying ? (
-            <Loader2 className="animate-spin" aria-hidden />
-          ) : (
-            <CreditCard aria-hidden />
-          )}
-          {wompiEnabled ? `Pagar ${amountLabel}` : "Pago en línea por configurar"}
-        </Button>
-      </section>
+          <Button
+            type="button"
+            className="mt-4 w-full"
+            onClick={payOnline}
+            disabled={paying}
+          >
+            {paying ? (
+              <Loader2 className="animate-spin" aria-hidden />
+            ) : (
+              <CreditCard aria-hidden />
+            )}
+            Pagar {amountLabel}
+          </Button>
+        </section>
+      )}
 
       <section aria-labelledby="manual-payment" className="rounded-3xl bg-card p-5">
         <div className="flex items-start justify-between gap-3">
@@ -167,13 +195,59 @@ export function SubscriptionActions({
               Pago por Bre-B
             </h2>
             <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-              Transfiere {amountLabel} a la misma llave de NutriAI y adjunta el comprobante.
+              Transfiere {amountLabel} a la llave de abajo y adjunta el comprobante.
             </p>
           </div>
           <span className="rounded-full bg-warning/15 px-2.5 py-1 text-[10px] font-semibold text-warning">
             Manual
           </span>
         </div>
+
+        {paymentLink && (
+          <Button asChild className="mt-4 w-full">
+            <a href={paymentLink} target="_blank" rel="noopener noreferrer">
+              <ExternalLink aria-hidden />
+              Pagar {amountLabel} por PSE
+            </a>
+          </Button>
+        )}
+
+        {codes.qrSvg && (
+          <div className="mt-4 flex flex-col items-center gap-3 rounded-2xl bg-secondary p-4">
+            <div
+              className="w-40 overflow-hidden rounded-xl bg-[#F7F8F6] p-2 [&>svg]:h-auto [&>svg]:w-full"
+              aria-hidden
+              dangerouslySetInnerHTML={{ __html: codes.qrSvg }}
+            />
+            <p className="text-center text-xs leading-relaxed text-muted-foreground">
+              {codes.qrPays
+                ? "Escanéalo con tu banco y paga directamente."
+                : "Al escanearlo obtienes la llave para pegarla en tu banco."}
+            </p>
+            <Button type="button" variant="ghost" size="sm" onClick={downloadQr}>
+              <Download aria-hidden />
+              Descargar QR
+            </Button>
+          </div>
+        )}
+
+        {codes.bankQrUrl && (
+          <div className="mt-3 flex flex-col items-center gap-3 rounded-2xl bg-secondary p-4">
+            <p className="eyebrow-sm">QR del banco</p>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={codes.bankQrUrl}
+              alt="Código QR de cobro emitido por el banco"
+              className="w-40 rounded-xl bg-[#F7F8F6] p-2"
+            />
+            <Button asChild variant="ghost" size="sm">
+              <a href={codes.bankQrUrl} download="cero-pago-qr-banco.png">
+                <Download aria-hidden />
+                Descargar
+              </a>
+            </Button>
+          </div>
+        )}
 
         <div className="mt-4 flex items-center gap-2 rounded-2xl bg-secondary p-3">
           <div className="min-w-0 flex-1">

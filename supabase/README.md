@@ -95,6 +95,17 @@ Vista con `security_invoker = on`: respeta las RLS de quien consulta. Resuelve
 saldo, progreso, próxima cuota y totales pagados en una sola consulta, en vez de
 traer todo el plan a la aplicación para sumarlo.
 
+## Almacenamiento
+
+| Bucket                | Qué guarda                          | Quién escribe        |
+| --------------------- | ----------------------------------- | -------------------- |
+| `payment-receipts`    | Comprobantes de pagos de crédito    | Cada usuario, lo suyo |
+| `saas-payment-proofs` | Comprobantes de la suscripción      | Cada usuario, lo suyo |
+| `payment-qr`          | QR de cobro del negocio (uno solo)  | **Sólo administradores** |
+
+El QR de cobro es el más sensible de los tres: quien pueda cambiarlo redirige
+los pagos a otra cuenta. Por eso su política de escritura exige `is_admin()`.
+
 ## Seguridad
 
 RLS activo en todas las tablas expuestas. Un usuario sólo alcanza:

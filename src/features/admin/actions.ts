@@ -6,6 +6,7 @@ import {
   createClient,
   getCurrentProfile,
 } from "@/infrastructure/supabase/server";
+import { PAYMENT_QR_BUCKET } from "@/features/billing/payment-qr";
 import type { ActionResult } from "@/shared/types/domain";
 
 const reason = z
@@ -212,5 +213,94 @@ export async function updatePlanSettings(
   revalidatePath("/admin");
   revalidatePath("/inicio");
   revalidatePath("/ia");
+  return { ok: true, data: undefined };
+}
+
+
+// ---------------------------------------------------------------------------
+// QR de cobro del comercio
+// ---------------------------------------------------------------------------
+
+const QR_MAX_BYTES = 2 * 1024 * 1024;
+const QR_TYPES = ["image/png", "image/jpeg", "image/webp"];
+
+/**
+ * Reemplaza el QR oficial del banco que se muestra en la pantalla de cobro.
+ *
+ * Se borra lo anterior antes de subir: si quedaran dos, el usuario podría ver
+ * el viejo y pagar a una cuenta que ya no es la del negocio. Con un solo
+ * archivo en el bucket no hay ambigüedad posible.
+ *
+ * Las políticas de Storage vuelven a exigir rol admin, así que esta
+ * comprobación es sólo el mensaje amable.
+ */
+export async function replacePaymentQr(
+  formData: FormData,
+): Promise<ActionResult> {
+  const me = await getCurrentProfile();
+  if (!me) return { ok: false, error: "Tu sesión expiró." };
+  if (me.role !== "admin") {
+    return { ok: false, error: "Necesitas permisos de administrador." };
+  }
+
+  const file = formData.get("qr");
+  if (!(file instanceof File) || file.size === 0) {
+    return { ok: false, error: "Elige la imagen del QR." };
+  }
+  if (file.size > QR_MAX_BYTES) {
+    return { ok: false, error: "La imagen supera los 2 MB." };
+  }
+  if (!QR_TYPES.includes(file.type)) {
+    return { ok: false, error: "Sube una imagen PNG, JPG o WebP." };
+  }
+
+  const supabase = await createClient();
+
+  const { data: existing } = await supabase.storage
+    .from(PAYMENT_QR_BUCKET)
+    .list("", { limit: 100 });
+  if (existing?.length) {
+    await supabase.storage
+      .from(PAYMENT_QR_BUCKET)
+      .remove(existing.map((item) => item.name));
+  }
+
+  const extension = file.type.split("/")[1].replace("jpeg", "jpg");
+  const { error } = await supabase.storage
+    .from(PAYMENT_QR_BUCKET)
+    .upload(`qr-${Date.now()}.${extension}`, file, {
+      contentType: file.type,
+      upsert: false,
+    });
+
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath("/admin");
+  revalidatePath("/suscripcion");
+  return { ok: true, data: undefined };
+}
+
+/** Retira el QR oficial; la pantalla vuelve a mostrar sólo la llave. */
+export async function removePaymentQr(): Promise<ActionResult> {
+  const me = await getCurrentProfile();
+  if (!me) return { ok: false, error: "Tu sesión expiró." };
+  if (me.role !== "admin") {
+    return { ok: false, error: "Necesitas permisos de administrador." };
+  }
+
+  const supabase = await createClient();
+  const { data: existing } = await supabase.storage
+    .from(PAYMENT_QR_BUCKET)
+    .list("", { limit: 100 });
+
+  if (existing?.length) {
+    const { error } = await supabase.storage
+      .from(PAYMENT_QR_BUCKET)
+      .remove(existing.map((item) => item.name));
+    if (error) return { ok: false, error: error.message };
+  }
+
+  revalidatePath("/admin");
+  revalidatePath("/suscripcion");
   return { ok: true, data: undefined };
 }

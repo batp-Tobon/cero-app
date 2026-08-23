@@ -137,6 +137,8 @@ export default async function SubscriptionPage({
           amountLabel={amountLabel}
           wompiEnabled={data.wompiEnabled}
           paymentKey={data.paymentKey}
+          paymentLink={data.paymentLink}
+          codes={data.codes}
           supportWhatsapp={data.supportWhatsapp}
           hasPendingManualPayment={Boolean(data.pendingManualPayment)}
           processingReturn={params.pago === "procesando"}
