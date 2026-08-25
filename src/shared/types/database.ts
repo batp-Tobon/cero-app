@@ -269,7 +269,8 @@ export type BudgetExpenseRow = {
   name: string;
   category: BudgetExpenseCategoryDB;
   amount: number;
-  due_day: number;
+  month: string;
+  due_date: string;
   recurring: boolean;
   position: number;
   created_at: string;
@@ -739,7 +740,7 @@ export type Database = {
         BudgetExpenseRow,
         Insertable<
           BudgetExpenseRow,
-          Generated | "category" | "due_day" | "recurring" | "position"
+          Generated | "category" | "recurring" | "position"
         >
       >;
       savings_pockets: Table<

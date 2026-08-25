@@ -48,7 +48,7 @@ const budgetSchema = z.object({
         name: z.string().trim().min(1, "Ponle un nombre al gasto.").max(80),
         category: z.enum(categories),
         amount: z.number().positive("Cada gasto debe ser mayor que cero."),
-        dueDay: z.number().int().min(1).max(31),
+        dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Fecha no válida."),
         recurring: z.boolean(),
       }),
     )
@@ -102,7 +102,7 @@ export async function saveMonthlyBudget(
       name: expense.name.trim(),
       category: expense.category,
       amount: money(expense.amount),
-      due_day: expense.dueDay,
+      due_date: expense.dueDate,
       recurring: expense.recurring,
       position,
     })),

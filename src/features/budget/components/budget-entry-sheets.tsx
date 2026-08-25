@@ -123,6 +123,7 @@ export function IncomeEntrySheet({
 }
 
 export function ExpenseEntrySheet({
+  month,
   value,
   disabled,
   canDelete,
@@ -131,6 +132,7 @@ export function ExpenseEntrySheet({
   onDelete,
   onClose,
 }: {
+  month: string;
   value: EditableExpense | null;
   disabled: boolean;
   canDelete: boolean;
@@ -139,7 +141,15 @@ export function ExpenseEntrySheet({
   onDelete: () => void;
   onClose: () => void;
 }) {
-  const valid = value != null && value.name.trim().length > 0 && value.amount > 0;
+  // Mismo truco que en los ingresos: pedir el 31 y dejar que `addMonths`
+  // ajuste al último día real del mes.
+  const monthEnd = addMonths(`${month.slice(0, 8)}31`, 0);
+  const valid =
+    value != null &&
+    value.name.trim().length > 0 &&
+    value.amount > 0 &&
+    value.dueDate >= month &&
+    value.dueDate <= monthEnd;
 
   return (
     <Sheet open={value != null} onOpenChange={(open) => !open && onClose()}>
@@ -187,34 +197,29 @@ export function ExpenseEntrySheet({
               </Select>
             </div>
 
-            <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_5.5rem] gap-3">
-              <div className="min-w-0 space-y-1.5">
-                <Label htmlFor="expense-amount">Valor mensual</Label>
-                <AmountField
-                  id="expense-amount"
-                  value={value.amount}
-                  onValueChange={(amount) => onChange({ ...value, amount })}
-                  disabled={disabled}
-                />
-              </div>
-              <div className="min-w-0 space-y-1.5">
-                <Label htmlFor="expense-day">Día</Label>
-                <Input
-                  id="expense-day"
-                  inputMode="numeric"
-                  value={String(value.dueDay)}
-                  onChange={(event) => {
-                    const dueDay = Math.min(
-                      31,
-                      Math.max(1, Number(event.target.value.replace(/\D/g, "")) || 1),
-                    );
-                    onChange({ ...value, dueDay });
-                  }}
-                  maxLength={2}
-                  disabled={disabled}
-                  className="h-14 text-center"
-                />
-              </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="expense-amount">Valor</Label>
+              <AmountField
+                id="expense-amount"
+                value={value.amount}
+                onValueChange={(amount) => onChange({ ...value, amount })}
+                disabled={disabled}
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="expense-date">Fecha del gasto</Label>
+              <Input
+                id="expense-date"
+                type="date"
+                min={month}
+                max={monthEnd}
+                value={value.dueDate}
+                onChange={(event) =>
+                  onChange({ ...value, dueDate: event.target.value })
+                }
+                disabled={disabled}
+              />
             </div>
 
             <CheckRow

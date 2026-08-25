@@ -79,7 +79,7 @@ export function BudgetPlanner({ snapshot }: { snapshot: BudgetSnapshot }) {
       name: "",
       category: "other",
       amount: 0,
-      dueDay: 1,
+      dueDate: snapshot.month,
       recurring: true,
     });
   }
@@ -123,11 +123,11 @@ export function BudgetPlanner({ snapshot }: { snapshot: BudgetSnapshot }) {
         receivedDate,
         recurring,
       })),
-      expenses: expenses.map(({ name, category, amount, dueDay, recurring }) => ({
+      expenses: expenses.map(({ name, category, amount, dueDate, recurring }) => ({
         name,
         category,
         amount,
-        dueDay,
+        dueDate,
         recurring,
       })),
     });
@@ -252,6 +252,7 @@ export function BudgetPlanner({ snapshot }: { snapshot: BudgetSnapshot }) {
         onClose={() => setIncomeDraft(null)}
       />
       <ExpenseEntrySheet
+        month={snapshot.month}
         value={expenseDraft}
         disabled={pending}
         canDelete={Boolean(

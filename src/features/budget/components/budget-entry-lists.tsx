@@ -150,7 +150,7 @@ export function ExpenseList({
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm font-semibold">{expense.name}</span>
                   <span className="mt-0.5 block text-xs text-muted-foreground">
-                    Día {expense.dueDay} · {category.label}
+                    {formatShortDate(expense.dueDate)} · {category.label}
                   </span>
                 </span>
                 <span className="shrink-0 text-right">

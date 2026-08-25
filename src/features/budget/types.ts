@@ -18,7 +18,8 @@ export interface BudgetExpense {
   name: string;
   category: BudgetExpenseCategory;
   amount: number;
-  dueDay: number;
+  /** Fecha concreta del gasto, no un día suelto del mes. */
+  dueDate: string;
   recurring: boolean;
 }
 

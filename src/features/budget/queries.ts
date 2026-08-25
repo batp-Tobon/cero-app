@@ -29,13 +29,21 @@ function obligationStatus(
   return status === "overdue" || dueDate < todayISO() ? "overdue" : "pending";
 }
 
-function toExpense(row: BudgetExpenseRow, projected: boolean): BudgetExpense {
+function toExpense(
+  row: BudgetExpenseRow,
+  projected: boolean,
+  targetMonth: string,
+): BudgetExpense {
   return {
     id: projected ? `projected:${row.id}` : row.id,
     name: row.name,
     category: row.category,
     amount: Number(row.amount),
-    dueDay: row.due_day,
+    // Igual que los ingresos: al arrastrar un gasto recurrente su fecha se
+    // corre al mes destino en vez de quedarse anclada al mes de origen.
+    dueDate: projected
+      ? addMonths(row.due_date, monthDistance(row.month, targetMonth))
+      : row.due_date,
     recurring: row.recurring,
   };
 }
@@ -195,7 +203,7 @@ export async function getBudgetSnapshot(month: string): Promise<BudgetSnapshot> 
     currency: sourceBudget?.currency ?? profile?.currency ?? env.defaultCurrency,
     expenses: expenseRows
       .filter((expense) => !projected || expense.recurring)
-      .map((expense) => toExpense(expense, projected)),
+      .map((expense) => toExpense(expense, projected, month)),
     obligations: [...creditObligations, ...revolvingObligations].sort((a, b) =>
       a.dueDate.localeCompare(b.dueDate),
     ),
