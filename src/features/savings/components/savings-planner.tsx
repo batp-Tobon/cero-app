@@ -18,6 +18,7 @@ import { cn } from "@/shared/lib/utils";
 import type { SavingsMovement, SavingsPocket, SavingsSnapshot } from "../types";
 import {
   CreatePocketSheet,
+  MovementDetailSheet,
   SavingsMovementSheet,
 } from "./savings-entry-sheets";
 import { SavingsPocketList } from "./savings-pocket-list";
@@ -27,6 +28,8 @@ export function SavingsPlanner({ snapshot }: { snapshot: SavingsSnapshot }) {
   const router = useRouter();
   const [createOpen, setCreateOpen] = React.useState(false);
   const [selectedPocket, setSelectedPocket] = React.useState<SavingsPocket | null>(null);
+  const [selectedMovement, setSelectedMovement] =
+    React.useState<SavingsMovement | null>(null);
   const currentMonth = `${todayISO().slice(0, 7)}-01`;
   const historical = snapshot.month < currentMonth;
 
@@ -70,7 +73,11 @@ export function SavingsPlanner({ snapshot }: { snapshot: SavingsSnapshot }) {
           title={formatMonthTitle(snapshot.month)}
           detail={`${snapshot.movements.length} ${snapshot.movements.length === 1 ? "movimiento" : "movimientos"}`}
         />
-        <MovementList movements={snapshot.movements} currency={snapshot.currency} />
+        <MovementList
+          movements={snapshot.movements}
+          currency={snapshot.currency}
+          onSelect={setSelectedMovement}
+        />
       </section>
 
       <CreatePocketSheet
@@ -83,6 +90,15 @@ export function SavingsPlanner({ snapshot }: { snapshot: SavingsSnapshot }) {
         pocket={selectedPocket}
         onClose={() => setSelectedPocket(null)}
         onSaved={() => router.refresh()}
+      />
+      <MovementDetailSheet
+        movement={selectedMovement}
+        currency={snapshot.currency}
+        onClose={() => setSelectedMovement(null)}
+        onDeleted={() => {
+          setSelectedMovement(null);
+          router.refresh();
+        }}
       />
     </div>
   );
@@ -122,9 +138,11 @@ function SectionTitle({
 function MovementList({
   movements,
   currency,
+  onSelect,
 }: {
   movements: SavingsMovement[];
   currency: string;
+  onSelect: (movement: SavingsMovement) => void;
 }) {
   if (movements.length === 0) {
     return (
@@ -141,7 +159,12 @@ function MovementList({
   return (
     <div className="mt-4 space-y-3">
       {movements.map((movement) => (
-        <MovementRow key={movement.id} movement={movement} currency={currency} />
+        <MovementRow
+          key={movement.id}
+          movement={movement}
+          currency={currency}
+          onSelect={onSelect}
+        />
       ))}
     </div>
   );
@@ -150,9 +173,11 @@ function MovementList({
 function MovementRow({
   movement,
   currency,
+  onSelect,
 }: {
   movement: SavingsMovement;
   currency: string;
+  onSelect: (movement: SavingsMovement) => void;
 }) {
   const withdrawal = movement.kind === "withdrawal";
   const automatic = movement.kind === "budget_surplus";
@@ -160,7 +185,12 @@ function MovementRow({
   const signedAmount = withdrawal ? -movement.amount : movement.amount;
 
   return (
-    <article className="flex items-center gap-3 rounded-3xl bg-card p-4">
+    <button
+      type="button"
+      onClick={() => onSelect(movement)}
+      aria-label={`Ver el movimiento de ${formatMoney(movement.amount, currency)}`}
+      className="flex w-full items-center gap-3 rounded-3xl bg-card p-4 text-left transition-colors hover:bg-secondary"
+    >
       <span
         className={cn(
           "flex h-10 w-10 shrink-0 items-center justify-center rounded-full",
@@ -190,6 +220,6 @@ function MovementRow({
         {signedAmount > 0 ? "+" : ""}
         {formatMoney(signedAmount, currency)}
       </p>
-    </article>
+    </button>
   );
 }

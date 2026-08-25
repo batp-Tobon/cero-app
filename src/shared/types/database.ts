@@ -892,6 +892,14 @@ export type Database = {
         };
         Returns: string;
       };
+      delete_savings_movement: {
+        Args: { p_movement_id: string };
+        Returns: null;
+      };
+      delete_savings_pocket: {
+        Args: { p_pocket_id: string };
+        Returns: null;
+      };
       register_savings_movement: {
         Args: {
           p_pocket_id: string;

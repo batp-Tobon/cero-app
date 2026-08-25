@@ -134,6 +134,93 @@ export async function registerSavingsMovement(
   return { ok: true, data: { id: data } };
 }
 
+/**
+ * Retira un movimiento mal registrado.
+ *
+ * Los excedentes automáticos no se pueden borrar: la sincronización los
+ * vuelve a derivar del presupuesto en la carga siguiente, así que ofrecerlo
+ * daría una sensación de control que no es real. Para que desaparezcan hay
+ * que corregir el presupuesto del mes.
+ */
+export async function deleteSavingsMovement(
+  movementId: string,
+): Promise<ActionResult> {
+  if (!UUID.test(movementId)) {
+    return { ok: false, error: "Movimiento no válido." };
+  }
+
+  const billing = await requireBillingWriteAccess();
+  if (!billing.ok) return billing;
+  if (!(await getCurrentUser())) return { ok: false, error: "Tu sesión expiró." };
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("delete_savings_movement", {
+    p_movement_id: movementId,
+  });
+
+  if (error) {
+    if (error.message.includes("negative balance")) {
+      return {
+        ok: false,
+        error:
+          "No puedes borrarlo: el bolsillo quedaría en negativo. Retira antes los movimientos posteriores.",
+      };
+    }
+    if (error.message.includes("Automatic surplus")) {
+      return {
+        ok: false,
+        error:
+          "El excedente del presupuesto se calcula solo. Cámbialo desde el presupuesto del mes.",
+      };
+    }
+    return {
+      ok: false,
+      error: publicActionError(
+        "savings.delete-movement",
+        error,
+        "No pudimos borrar el movimiento.",
+      ),
+    };
+  }
+
+  revalidateSavings();
+  return { ok: true, data: undefined };
+}
+
+/** Borra un bolsillo con todo su historial. */
+export async function deleteSavingsPocket(
+  pocketId: string,
+): Promise<ActionResult> {
+  if (!UUID.test(pocketId)) {
+    return { ok: false, error: "Bolsillo no válido." };
+  }
+
+  const billing = await requireBillingWriteAccess();
+  if (!billing.ok) return billing;
+  if (!(await getCurrentUser())) return { ok: false, error: "Tu sesión expiró." };
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("delete_savings_pocket", {
+    p_pocket_id: pocketId,
+  });
+
+  if (error) {
+    return {
+      ok: false,
+      error: publicActionError(
+        "savings.delete-pocket",
+        error,
+        "No pudimos borrar el bolsillo.",
+      ),
+    };
+  }
+
+  revalidateSavings();
+  return { ok: true, data: undefined };
+}
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 function revalidateSavings() {
   revalidatePath("/ahorros");
   revalidatePath("/inicio");

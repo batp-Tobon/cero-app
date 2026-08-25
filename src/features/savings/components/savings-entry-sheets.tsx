@@ -1,11 +1,20 @@
 "use client";
 
 import * as React from "react";
-import { ArrowDownToLine, ArrowUpFromLine, Check, Loader2 } from "lucide-react";
+import {
+  ArrowDownToLine,
+  ArrowUpFromLine,
+  Check,
+  Loader2,
+  Sparkles,
+  Trash2,
+} from "lucide-react";
 import { toast } from "sonner";
 import {
   createSavingsPocket,
   registerSavingsMovement,
+  deleteSavingsMovement,
+  deleteSavingsPocket,
 } from "@/features/savings/actions";
 import { AmountField } from "@/shared/components/amount-field";
 import { AppearancePicker } from "@/shared/components/appearance-picker";
@@ -23,8 +32,10 @@ import {
 } from "@/shared/ui/sheet";
 import { todayISO } from "@/shared/lib/dates";
 import { formatMoney } from "@/shared/lib/format";
+import { cn } from "@/shared/lib/utils";
 import type { AccentColor, IconName } from "@/shared/lib/appearance";
-import type { SavingsPocket } from "../types";
+import { formatShortDate } from "@/shared/lib/dates";
+import type { SavingsMovement, SavingsPocket } from "../types";
 
 const MOVEMENT_OPTIONS = [
   { value: "deposit", label: "Guardar", icon: ArrowDownToLine, hint: "Dinero que entra" },
@@ -253,6 +264,205 @@ export function SavingsMovementSheet({
               {kind === "deposit" ? "Guardar ahorro" : "Confirmar retiro"}
             </Button>
           </form>
+        )}
+
+        {pocket && (
+          <div className="mt-6 border-t border-border pt-5">
+            <DeleteConfirm
+              label="Eliminar bolsillo"
+              warning={[
+                pocket.balance > 0
+                  ? `Se borra el bolsillo y todo su historial, incluidos ${formatMoney(pocket.balance, pocket.currency)} de saldo.`
+                  : "Se borra el bolsillo y todo su historial.",
+                // El automático lo vuelve a crear la sincronización mientras
+                // el presupuesto siga dejando excedente; callarlo haría
+                // parecer que el borrado falló.
+                pocket.isDefault
+                  ? "Al ser el bolsillo automático, volverá a crearse vacío mientras tu presupuesto siga dejando excedente."
+                  : "No se puede deshacer.",
+              ].join(" ")}
+              pending={pending}
+              onDelete={async () => {
+                setPending(true);
+                const result = await deleteSavingsPocket(pocket.id);
+                setPending(false);
+                if (!result.ok) {
+                  setError(result.error);
+                  return;
+                }
+                toast.success("Bolsillo eliminado");
+                onClose();
+                onSaved();
+              }}
+            />
+          </div>
+        )}
+      </SheetContent>
+    </Sheet>
+  );
+}
+
+/**
+ * Confirmación en dos pasos para una acción que no se deshace.
+ *
+ * Un solo toque bastaría para borrar meses de historial; el segundo paso
+ * cuesta medio segundo y evita el arrepentimiento.
+ */
+function DeleteConfirm({
+  label,
+  warning,
+  pending,
+  onDelete,
+}: {
+  label: string;
+  warning: string;
+  pending: boolean;
+  onDelete: () => void;
+}) {
+  const [confirming, setConfirming] = React.useState(false);
+
+  if (!confirming) {
+    return (
+      <Button
+        type="button"
+        variant="ghost"
+        className="w-full text-destructive hover:bg-destructive/10 hover:text-destructive"
+        disabled={pending}
+        onClick={() => setConfirming(true)}
+      >
+        <Trash2 className="h-4 w-4" aria-hidden />
+        {label}
+      </Button>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      <InlineNotice variant="danger">{warning}</InlineNotice>
+      <div className="flex gap-2.5">
+        <Button
+          type="button"
+          variant="secondary"
+          className="flex-1"
+          disabled={pending}
+          onClick={() => setConfirming(false)}
+        >
+          Cancelar
+        </Button>
+        <Button
+          type="button"
+          variant="destructive"
+          className="flex-1"
+          disabled={pending}
+          onClick={onDelete}
+        >
+          {pending && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}
+          Eliminar
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Detalle de un movimiento, con la opción de retirarlo.
+ *
+ * El excedente del presupuesto no se puede borrar aquí: lo deriva la
+ * sincronización del presupuesto en cada carga y volvería a aparecer. En su
+ * lugar se explica dónde cambiarlo de verdad.
+ */
+export function MovementDetailSheet({
+  movement,
+  currency,
+  onClose,
+  onDeleted,
+}: {
+  movement: SavingsMovement | null;
+  currency: string;
+  onClose: () => void;
+  onDeleted: () => void;
+}) {
+  const [pending, setPending] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    if (movement) setError(null);
+  }, [movement]);
+
+  const automatic = movement?.kind === "budget_surplus";
+  const withdrawal = movement?.kind === "withdrawal";
+
+  async function onDelete() {
+    if (!movement) return;
+    setError(null);
+    setPending(true);
+    const result = await deleteSavingsMovement(movement.id);
+    setPending(false);
+    if (!result.ok) {
+      setError(result.error);
+      return;
+    }
+    toast.success("Movimiento eliminado");
+    onDeleted();
+  }
+
+  return (
+    <Sheet open={movement != null} onOpenChange={(open) => !open && onClose()}>
+      <SheetContent>
+        <SheetHeader>
+          <SheetTitle>
+            {automatic
+              ? "Excedente del presupuesto"
+              : withdrawal
+                ? "Retiro"
+                : "Ahorro"}
+          </SheetTitle>
+          <SheetDescription>
+            {movement
+              ? `${formatShortDate(movement.movementDate)} · ${movement.pocketName}`
+              : ""}
+          </SheetDescription>
+        </SheetHeader>
+
+        {movement && (
+          <div className="space-y-4">
+            {error && <InlineNotice variant="danger">{error}</InlineNotice>}
+
+            <div className="rounded-2xl bg-secondary p-4 text-center">
+              <p
+                className={cn(
+                  "figure-lead tabular",
+                  withdrawal ? "text-destructive" : "text-primary",
+                )}
+              >
+                {withdrawal ? "−" : "+"}
+                {formatMoney(movement.amount, currency)}
+              </p>
+              {movement.description && (
+                <p className="mt-1.5 text-xs text-muted-foreground">
+                  {movement.description}
+                </p>
+              )}
+            </div>
+
+            {automatic ? (
+              <InlineNotice>
+                <span className="flex items-start gap-2">
+                  <Sparkles className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+                  Este movimiento se calcula solo a partir de lo que te sobra en
+                  el presupuesto del mes. Para cambiarlo, ajusta ese presupuesto:
+                  borrarlo aquí no serviría porque volvería a aparecer.
+                </span>
+              </InlineNotice>
+            ) : (
+              <DeleteConfirm
+                label="Eliminar movimiento"
+                warning="Se retira del historial y el saldo del bolsillo se recalcula sin él."
+                pending={pending}
+                onDelete={onDelete}
+              />
+            )}
+          </div>
         )}
       </SheetContent>
     </Sheet>
