@@ -7,7 +7,6 @@ import {
   CircleDollarSign,
   Loader2,
 } from "lucide-react";
-import { toast } from "sonner";
 import { calculateBudget } from "@/core/budget";
 import { saveMonthlyBudget } from "@/features/budget/actions";
 import type { BudgetSnapshot } from "@/features/budget/types";
@@ -43,6 +42,59 @@ export function BudgetPlanner({ snapshot }: { snapshot: BudgetSnapshot }) {
   const [expenseDraft, setExpenseDraft] = React.useState<EditableExpense | null>(null);
   const [pending, setPending] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+
+  /**
+   * Guardados en cola, uno detrás de otro.
+   *
+   * El RPC reemplaza el mes entero, así que dos peticiones en vuelo podrían
+   * llegar al revés y dejar escrito el estado viejo. Encadenarlas garantiza
+   * que la última en salir es la última en escribir.
+   */
+  const queue = React.useRef<Promise<void>>(Promise.resolve());
+  /** Lo último que se intentó guardar, para el botón de reintentar. */
+  const lastAttempt = React.useRef<{
+    incomes: EditableIncome[];
+    expenses: EditableExpense[];
+  } | null>(null);
+
+  const persist = React.useCallback(
+    (nextIncomes: EditableIncome[], nextExpenses: EditableExpense[]) => {
+      lastAttempt.current = { incomes: nextIncomes, expenses: nextExpenses };
+      setPending(true);
+      setError(null);
+      queue.current = queue.current.then(async () => {
+        const result = await saveMonthlyBudget({
+          // El mes es el que se está viendo, no el de hoy: registrar en
+          // septiembre desde agosto tiene que quedar en septiembre.
+          month: snapshot.month,
+          currency: snapshot.currency,
+          incomes: nextIncomes.map(({ name, amount, receivedDate, recurring }) => ({
+            name,
+            amount,
+            receivedDate,
+            recurring,
+          })),
+          expenses: nextExpenses.map(
+            ({ name, category, amount, dueDate, recurring }) => ({
+              name,
+              category,
+              amount,
+              dueDate,
+              recurring,
+            }),
+          ),
+        });
+        setPending(false);
+        if (!result.ok) {
+          setError(result.error);
+          return;
+        }
+        setError(null);
+        router.refresh();
+      });
+    },
+    [router, snapshot.month, snapshot.currency],
+  );
 
   const totals = calculateBudget(incomes, expenses, snapshot.obligations);
   const ready =
@@ -84,63 +136,39 @@ export function BudgetPlanner({ snapshot }: { snapshot: BudgetSnapshot }) {
     });
   }
 
+  /** Inserta o reemplaza una entrada según si ya estaba en la lista. */
+  function upsert<T extends { clientId: string }>(list: T[], entry: T): T[] {
+    return list.some((item) => item.clientId === entry.clientId)
+      ? list.map((item) => (item.clientId === entry.clientId ? entry : item))
+      : [...list, entry];
+  }
+
   function commitIncome() {
     if (!incomeDraft) return;
-    setIncomes((current) =>
-      current.some((income) => income.clientId === incomeDraft.clientId)
-        ? current.map((income) =>
-            income.clientId === incomeDraft.clientId ? incomeDraft : income,
-          )
-        : [...current, incomeDraft],
-    );
+    const next = upsert(incomes, incomeDraft);
+    setIncomes(next);
     setIncomeDraft(null);
+    persist(next, expenses);
   }
 
   function commitExpense() {
     if (!expenseDraft) return;
-    setExpenses((current) =>
-      current.some((expense) => expense.clientId === expenseDraft.clientId)
-        ? current.map((expense) =>
-            expense.clientId === expenseDraft.clientId ? expenseDraft : expense,
-          )
-        : [...current, expenseDraft],
-    );
+    const next = upsert(expenses, expenseDraft);
+    setExpenses(next);
     setExpenseDraft(null);
+    persist(incomes, next);
   }
 
-  async function onSubmit(event: React.FormEvent) {
+  function onSubmit(event: React.FormEvent) {
     event.preventDefault();
     if (!ready || pending) return;
-
-    setPending(true);
-    setError(null);
-    const result = await saveMonthlyBudget({
-      month: snapshot.month,
-      currency: snapshot.currency,
-      incomes: incomes.map(({ name, amount, receivedDate, recurring }) => ({
-        name,
-        amount,
-        receivedDate,
-        recurring,
-      })),
-      expenses: expenses.map(({ name, category, amount, dueDate, recurring }) => ({
-        name,
-        category,
-        amount,
-        dueDate,
-        recurring,
-      })),
-    });
-    setPending(false);
-
-    if (!result.ok) {
-      setError(result.error);
-      return;
-    }
-
-    toast.success("Presupuesto guardado");
-    router.refresh();
+    persist(incomes, expenses);
   }
+
+  // El mes proyectado es el único que necesita un botón: sus cifras son una
+  // copia del mes anterior que todavía no existe en la base, y quien la da
+  // por buena sin tocar nada no dispara ningún guardado.
+  const needsConfirmation = snapshot.source === "projected";
 
   return (
     <form onSubmit={onSubmit} className="animate-fade-in pb-4" noValidate>
@@ -165,13 +193,25 @@ export function BudgetPlanner({ snapshot }: { snapshot: BudgetSnapshot }) {
         <p className="mt-3 rounded-2xl bg-warning/10 px-4 py-3 text-xs leading-relaxed text-warning">
           Copiamos los ingresos y gastos recurrentes de {formatMonthTitle(
             snapshot.sourceMonth,
-          ).toLowerCase()}. Guarda para crear este mes.
+          ).toLowerCase()}. Confírmalos abajo o edita algo para crear este mes.
         </p>
       )}
 
       {error && (
-        <div className="mt-4">
+        <div className="mt-4 space-y-2">
           <InlineNotice variant="danger">{error}</InlineNotice>
+          <Button
+            type="button"
+            variant="secondary"
+            className="w-full"
+            disabled={pending}
+            onClick={() => {
+              const attempt = lastAttempt.current;
+              if (attempt) persist(attempt.incomes, attempt.expenses);
+            }}
+          >
+            Reintentar
+          </Button>
         </div>
       )}
 
@@ -226,16 +266,43 @@ export function BudgetPlanner({ snapshot }: { snapshot: BudgetSnapshot }) {
             {formatMoney(totals.totalOutflow, snapshot.currency)}
           </span>
         </div>
-        <Button type="submit" className="mt-4 w-full" disabled={pending || !ready}>
-          {pending ? <Loader2 className="animate-spin" aria-hidden /> : <Check aria-hidden />}
-          Guardar {formatMonthTitle(snapshot.month).toLowerCase()}
-        </Button>
+
+        {needsConfirmation ? (
+          <Button type="submit" className="mt-4 w-full" disabled={pending || !ready}>
+            {pending ? (
+              <Loader2 className="animate-spin" aria-hidden />
+            ) : (
+              <Check aria-hidden />
+            )}
+            Confirmar {formatMonthTitle(snapshot.month).toLowerCase()}
+          </Button>
+        ) : (
+          <p
+            aria-live="polite"
+            className="mt-3 flex items-center justify-center gap-1.5 text-xs text-muted-foreground"
+          >
+            {pending ? (
+              <>
+                <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+                Guardando…
+              </>
+            ) : (
+              <>
+                <Check className="h-3.5 w-3.5 text-primary" aria-hidden />
+                Se guarda solo en {formatMonthTitle(snapshot.month).toLowerCase()}
+              </>
+            )}
+          </p>
+        )}
       </div>
 
+      {/* Las hojas no se bloquean mientras guarda: la cola ya ordena las
+          escrituras y cada envío lleva el estado completo, así que encadenar
+          dos altas seguidas es seguro. Bloquear solo añadiría una espera. */}
       <IncomeEntrySheet
         value={incomeDraft}
         month={snapshot.month}
-        disabled={pending}
+        disabled={false}
         canDelete={Boolean(
           incomeDraft &&
             incomes.some((income) => income.clientId === incomeDraft.clientId),
@@ -244,17 +311,19 @@ export function BudgetPlanner({ snapshot }: { snapshot: BudgetSnapshot }) {
         onSave={commitIncome}
         onDelete={() => {
           if (!incomeDraft) return;
-          setIncomes((current) =>
-            current.filter((income) => income.clientId !== incomeDraft.clientId),
+          const next = incomes.filter(
+            (income) => income.clientId !== incomeDraft.clientId,
           );
+          setIncomes(next);
           setIncomeDraft(null);
+          persist(next, expenses);
         }}
         onClose={() => setIncomeDraft(null)}
       />
       <ExpenseEntrySheet
         month={snapshot.month}
         value={expenseDraft}
-        disabled={pending}
+        disabled={false}
         canDelete={Boolean(
           expenseDraft &&
             expenses.some((expense) => expense.clientId === expenseDraft.clientId),
@@ -263,10 +332,12 @@ export function BudgetPlanner({ snapshot }: { snapshot: BudgetSnapshot }) {
         onSave={commitExpense}
         onDelete={() => {
           if (!expenseDraft) return;
-          setExpenses((current) =>
-            current.filter((expense) => expense.clientId !== expenseDraft.clientId),
+          const next = expenses.filter(
+            (expense) => expense.clientId !== expenseDraft.clientId,
           );
+          setExpenses(next);
           setExpenseDraft(null);
+          persist(incomes, next);
         }}
         onClose={() => setExpenseDraft(null)}
       />
